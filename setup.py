@@ -16,6 +16,6 @@ setup (name         = "freevo",
 
        package_dir = { 'freevo.tvserver': 'src' },
        packages    = [ 'freevo.tvserver', 'freevo.tvserver' ],
-       scripts     = [ 'bin/recordserver.py' ],
+       scripts     = [ 'bin/freevo-tvserver' ],
        data_files  = share_files
        )
