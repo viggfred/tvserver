@@ -9,7 +9,8 @@ log = logging.getLogger()
 
 schema = { 'RECORDINGS_START_PADDING': int,
            'RECORDINGS_STOP_PADDING' : int,
-           'GENERAL_UID' : int }
+           'SERVER_UID' : int,
+           'START_TVDEV': bool }
 
 conf = Config('tvserver.conf', schema)
 
@@ -23,5 +24,5 @@ if not RECORD_DIR:
     log.error('Please check the config file: %s' % conf.filename)
     sys.exit(0)
 
-EPG_FILENAME.replace('$(DATADIR)', DATADIR)
-EPG_MAPPING = conf['epg mapping']
+EPG_FILENAME = EPG_FILENAME.replace('$(DATADIR)', DATADIR)
+EPG_MAPPING  = conf['epg mapping']

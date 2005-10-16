@@ -40,6 +40,7 @@ import logging
 # kaa imports
 import kaa
 import kaa.notifier
+import kaa.epg
 
 # insert freevo path information
 __site__ = '../lib/python%s.%s/site-packages' % sys.version_info[:2]
@@ -48,7 +49,7 @@ if not __site__ in sys.path:
     sys.path.insert(0, __site__)
 
 # create logger objects in conf
-import freevo.tvserver.config
+from freevo.tvserver import config
 
 # get logging object
 log = logging.getLogger('record')
@@ -56,23 +57,18 @@ log = logging.getLogger('record')
 # set basic recording debug to info
 log.setLevel(logging.INFO)
 
-# import freevo config
-# FIXME:
-# import config
-
 # change uid
 try:
-    if config.TV_RECORD_SERVER_UID and os.getuid() == 0:
-        os.setgid(config.TV_RECORD_SERVER_GID)
-        os.setuid(config.TV_RECORD_SERVER_UID)
+    if config.SERVER_UID and os.getuid() == 0:
+        os.setgid(config.SERVER_GID)
+        os.setuid(config.SERVER_UID)
         os.environ['USER'] = pwd.getpwuid(os.getuid())[0]
         os.environ['HOME'] = pwd.getpwuid(os.getuid())[5]
 except Exception, e:
     log.warning('unable to set uid: %s' % e)
 
-# FIXME: create kaa.epg
-import kaa.epg
-kaa.epg.connect('sqlite2', freevo.conf.datafile('epgdb2'))
+# load the epg
+kaa.epg.connect(config.EPG_BACKEND, config.EPG_FILENAME)
 kaa.epg.load()
 
 # import recordserver
@@ -82,9 +78,9 @@ from freevo.tvserver.server import RecordServer
 server = RecordServer()
 
 # start recorder for this machine
-# FIXME:
-# if config.TV_RECORD_START_RECORDER:
-#    kaa.notifier.Process('freevo-tvdev').start()
+if config.START_TVDEV:
+    os.environ['PATH'] = '%s:%s' % (os.path.dirname(__file__), os.environ['PATH'])
+    kaa.notifier.Process('freevo-tvdev').start()
 
 
 try:
