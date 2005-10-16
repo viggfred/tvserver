@@ -26,5 +26,3 @@ if not RECORD_DIR:
 
 EPG_FILENAME = EPG_FILENAME.replace('$(DATADIR)', DATADIR)
 EPG_MAPPING  = conf['epg mapping']
-
-print conf.normalize()
