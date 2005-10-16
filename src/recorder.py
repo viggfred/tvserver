@@ -343,7 +343,6 @@ class Recorder(object):
             if remote.id == UNKNOWN_ID and not remote.valid:
                 # remove it from the list, looks like the recording
                 # was already removed and not yet scheduled
-                log.error('UNKNOWN_ID')
                 self.recordings.remove(remote)
                 continue
             if remote.id == UNKNOWN_ID:
