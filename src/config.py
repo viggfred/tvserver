@@ -7,8 +7,8 @@ from freevo.conf import *
 # get logging object
 log = logging.getLogger()
 
-schema = { 'RECORDINGS_START_PADDING': int,
-           'RECORDINGS_STOP_PADDING' : int,
+schema = { 'RECORD_START_PADDING': int,
+           'RECORD_STOP_PADDING' : int,
            'SERVER_UID' : int,
            'START_TVDEV': bool }
 
@@ -26,3 +26,5 @@ if not RECORD_DIR:
 
 EPG_FILENAME = EPG_FILENAME.replace('$(DATADIR)', DATADIR)
 EPG_MAPPING  = conf['epg mapping']
+
+print conf.normalize()
