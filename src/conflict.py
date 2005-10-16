@@ -62,6 +62,9 @@ __all__ = [ 'resolve', 'clear_cache' ]
 import logging
 import time
 
+# kaa notifier for step
+import kaa.notifier
+
 # record imports
 import recorder
 from record_types import *
@@ -320,6 +323,10 @@ def resolve(recordings, recorder):
 
     # resolve recordings
     for c in scan(recordings):
+        # FIXME: This keeps the main loop alive but is ugly.
+        # Change it to something better when kaa.epg is thread based
+        kaa.notifier.step(False)
+            
         if 0:
             info = 'found conflict:\n'
             log.info(info)

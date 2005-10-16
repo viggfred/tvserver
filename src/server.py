@@ -96,6 +96,7 @@ class RecordServer(RPCServer):
         self.recorder = recorder.RecorderList(self)
         
         # start by checking the favorites
+        self.check_current_recordings()
         self.check_favorites()
 
         # add schedule timer for SCHEDULE_TIMER / 3 seconds
@@ -227,17 +228,11 @@ class RecordServer(RPCServer):
                 r.remove()
         return True
     
-        
-    def check_favorites(self):
+
+    def check_current_recordings(self):
         """
-        Check favorites against the database and add them to the list of
-        recordings
+        Check current recordings against the database/
         """
-        t1 = time.time()
-        
-        # Check current scheduled recordings if the start time has changed.
-        # Only check recordings with start time greater 15 minutes from now
-        # to avoid changing running recordings
         ctime = time.time() + 60 * 15
         recordings = filter(lambda r: r.start - r.start_padding > ctime \
                             and r.status in (CONFLICT, SCHEDULED),
@@ -252,6 +247,10 @@ class RecordServer(RPCServer):
             # huge database with over 100 channels will slow the database
             # down.
 
+            # FIXME: This keeps the main loop alive but is ugly.
+            # Change it to something better when kaa.epg is thread based
+            kaa.notifier.step(False)
+            
             # Search epg for that recording. The recording should be at the
             # same time, maybe it has moved +- 20 minutes. If the program
             # moved a larger time interval, it won't be found again.
@@ -296,12 +295,34 @@ class RecordServer(RPCServer):
             if changed:
                 update.append(rec.short_list())
                 
+        # send update about the recordings
+        self.send_update(update)
+
+        
+    def check_favorites(self):
+        """
+        Check favorites against the database and add them to the list of
+        recordings
+        """
+        t1 = time.time()
+
+        update = []
+        
+        # Check current scheduled recordings if the start time has changed.
+        # Only check recordings with start time greater 15 minutes from now
+        # to avoid changing running recordings
         for f in copy.copy(self.favorites):
             # Now check all the favorites. Again, this could block but we
             # assume a reasonable number of favorites.
             for p in kaa.epg.search(f.name, exact_match=True):
+
+                # FIXME: This keeps the main loop alive but is ugly.
+                # Change it to something better when kaa.epg is thread based
+                kaa.notifier.step(False)
+            
                 if not f.match(p.title, p.channel.id, p.start):
                     continue
+
                 r = Recording(self.rec_id, p.title, p.channel.id, f.priority,
                               p.start, p.stop)
                 if r in self.recordings:
@@ -694,6 +715,7 @@ class RecordServer(RPCServer):
         """
         updates favorites with data from the database
         """
+        self.check_current_recordings()
         self.check_favorites()
         return RPCReturn()
 
