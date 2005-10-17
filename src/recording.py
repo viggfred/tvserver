@@ -68,10 +68,15 @@ class Recording(object):
     """
     Base class for a recording.
     """
-    def __init__(self, id = -1, name = 'unknown', channel = 'unknown',
+    NEXT_ID = 0
+    
+    def __init__(self, name = 'unknown', channel = 'unknown',
                  priority = 0, start = 0, stop = 0, info = {},
                  status = SCHEDULED ):
-        self.id       = id
+
+        self.id       = Recording.NEXT_ID
+        Recording.NEXT_ID += 1
+        
         self.name     = name
         self.channel  = channel
         self.priority = priority
@@ -141,7 +146,6 @@ class Recording(object):
         """
         Parse informations from a fxd node and set the internal variables.
         """
-        self.id = int(parser.getattr(node, 'id'))
         for child in node.children:
             for var in ('name', 'channel', 'status', 'subtitle', 'fxdname',
                         'episode', 'description'):

@@ -54,10 +54,14 @@ class Favorite(object):
     """
     Base class for a favorite.
     """
-    def __init__(self, id = -1, name = 'unknown', channels = [],
+    NEXT_ID = 0
+    
+    def __init__(self, name = 'unknown', channels = [],
                  priority = 0, days = [], times = [], once = False,
                  substring = False):
-        self.id        = id
+        self.id        = Favorite.NEXT_ID
+        Favorite.NEXT_ID += 1
+        
         self.name      = name
         self.channels  = channels
         self.priority  = priority
@@ -95,7 +99,6 @@ class Favorite(object):
         """
         Parse informations from a fxd node and set the internal variables.
         """
-        self.id = int(parser.getattr(node, 'id'))
         for child in node.children:
             for var in ('name', 'url', 'fxdname'):
                 if child.name == var:

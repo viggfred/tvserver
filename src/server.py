@@ -82,7 +82,7 @@ class RecordServer(RPCServer):
         # file to load / save the recordings and favorites
         self.fxdfile = freevo.conf.datafile('recordserver.fxd')
         # load the recordings file
-        self.load(True)
+        self.load()
 
         # timer to handle save and print debug in background
         self.save_timer = OneShotTimer(self.save, False)
@@ -144,8 +144,6 @@ class RecordServer(RPCServer):
         for f in self.favorites:
             info += '%s\n' % f
         log.info(info)
-        log.info('next ids: record=%s favorite=%s' % \
-                 (self.rec_id, self.fav_id))
 
         
     def check_recordings(self, force=False):
@@ -323,7 +321,7 @@ class RecordServer(RPCServer):
                 if not f.match(p.title, p.channel.id, p.start):
                     continue
 
-                r = Recording(self.rec_id, p.title, p.channel.id, f.priority,
+                r = Recording(p.title, p.channel.id, f.priority,
                               p.start, p.stop)
                 if r in self.recordings:
                     # This does not only avoid adding recordings twice, it
@@ -337,7 +335,6 @@ class RecordServer(RPCServer):
                                                 String(p.title), p.start))
                 f.add_data(r)
                 self.recordings.append(r)
-                self.rec_id += 1
                 update.append(r.short_list())
                 if f.once:
                     self.favorites.remove(f)
@@ -368,7 +365,6 @@ class RecordServer(RPCServer):
             r = Recording()
             r.parse_fxd(parser, node)
             self.recordings.append(r)
-            self.rec_id = max(self.rec_id, r.id + 1)
         except Exception, e:
             log.exception('recordserver.load_recording')
 
@@ -381,17 +377,14 @@ class RecordServer(RPCServer):
             f = Favorite()
             f.parse_fxd(parser, node)
             self.favorites.append(f)
-            self.fav_id = max(self.fav_id, f.id + 1)
         except Exception, e:
             log.exception('recordserver.load_favorite:')
 
 
-    def load(self, rebuild=False):
+    def load(self):
         """
         load the fxd file
         """
-        self.rec_id = 0
-        self.fav_id = 0
         self.recordings = []
         self.favorites = []
         try:
@@ -401,12 +394,6 @@ class RecordServer(RPCServer):
             fxd.parse()
         except Exception, e:
             log.exception('recordserver.load: %s corrupt:' % self.fxdfile)
-
-        if rebuild:
-            for r in self.recordings:
-                r.id = self.recordings.index(r)
-            for f in self.favorites:
-                f.id = self.favorites.index(f)
 
 
     def save(self, schedule=True):
@@ -568,8 +555,7 @@ class RecordServer(RPCServer):
             info['description'] = Unicode(info['description'], 'UTF-8')
 
         log.info('recording.add: %s' % String(name))
-        r = Recording(self.rec_id, name, channel, priority, start, stop,
-                      info = info)
+        r = Recording(name, channel, priority, start, stop, info = info)
 
         if r in self.recordings:
             r = self.recordings[self.recordings.index(r)]
@@ -579,12 +565,11 @@ class RecordServer(RPCServer):
                 # send update about the new recording
                 self.send_update(r.short_list())
                 self.check_recordings()
-                return RPCReturn(self.rec_id - 1)
+                return RPCReturn(r.id)
             return RPCError('Already scheduled')
         self.recordings.append(r)
-        self.rec_id += 1
         self.check_recordings()
-        return RPCReturn(self.rec_id - 1)
+        return RPCReturn(r.id - 1)
 
 
     def __rpc_recording_remove__(self, addr, val):
@@ -732,11 +717,10 @@ class RecordServer(RPCServer):
               self.parse_parameter(val, ( unicode, list, int, list, list,
                                           bool ))
         log.info('favorite.add: %s' % String(name))
-        f = Favorite(self.fav_id, name, channels, priority, days, times, once)
+        f = Favorite(name, channels, priority, days, times, once)
         if f in self.favorites:
             return RPCError('Already scheduled')
         self.favorites.append(f)
-        self.fav_id += 1
         return self.__rpc_favorite_update__()
 
 
