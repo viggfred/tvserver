@@ -164,7 +164,7 @@ class Favorite(object):
                     'subtitle' : rec.subtitle }
         for o in options:
             # remove bad chars
-            options[o] = options[o].replace('/', '_')
+            options[o] = String(options[o]).replace('/', '_')
         for pattern in re.findall('%\([a-z]*\)', text):
             if not pattern[2:-1] in options:
                 options[pattern[2:-1]] = pattern
