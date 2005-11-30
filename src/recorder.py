@@ -37,11 +37,12 @@ import string
 import copy
 import logging
 
-import mbus
-
 # kaa imports
 from kaa.notifier import OneShotTimer, Callback
 import kaa.epg
+
+# freevo core imports
+import freevo.mcomm
 
 # record imports
 import config
@@ -128,11 +129,8 @@ class RecorderList(object):
         """
         RPC return for device.list()
         """
-        if isinstance(result, mbus.types.MError):
+        if isinstance(result, freevo.mcomm.RPCError):
             log.error(str(result))
-            return
-        if not result.appStatus:
-            log.error(str(result.appDescription))
             return
         for device in result.arguments:
             Recorder(entity, self, device)
@@ -214,12 +212,8 @@ class Recorder(object):
         """
         RPC return for device.describe()
         """
-        if isinstance(result, mbus.types.MError):
+        if isinstance(result, freevo.mcomm.RPCError):
             log.error(str(result))
-            self.handler.remove(self)
-            return
-        if not result.appStatus:
-            log.error(str(result.appDescription))
             self.handler.remove(self)
             return
 
@@ -374,12 +368,8 @@ class Recorder(object):
         """
         Callback for vdr.record
         """
-        if isinstance(result, mbus.types.MError):
+        if isinstance(result, freevo.mcomm.RPCError):
             log.error(str(result))
-            self.handler.remove(self)
-            return
-        if not result.appStatus:
-            log.error(str(result.appDescription))
             self.handler.remove(self)
             return
 
@@ -399,12 +389,8 @@ class Recorder(object):
         """
         Callback for vdr.remove
         """
-        if isinstance(result, mbus.types.MError):
+        if isinstance(result, freevo.mcomm.RPCError):
             log.error(str(result))
-            self.handler.remove(self)
-            return
-        if not result.appStatus:
-            log.error(str(result.appDescription))
             self.handler.remove(self)
             return
         # check more recordings
@@ -432,12 +418,8 @@ class Recorder(object):
         """
         Callback for vdr.record for live tv
         """
-        if isinstance(result, mbus.types.MError):
+        if isinstance(result, freevo.mcomm.RPCError):
             log.error(str(result))
-            self.handler.remove(self)
-            return
-        if not result.appStatus:
-            log.error(str(result.appDescription))
             self.handler.remove(self)
             return
         log.info('return for live tv start')
@@ -467,12 +449,8 @@ class Recorder(object):
         """
         Callback for vdr.remove for live tv
         """
-        if isinstance(result, mbus.types.MError):
+        if isinstance(result, freevo.mcomm.RPCError):
             log.error(str(result))
-            self.handler.remove(self)
-            return
-        if not result.appStatus:
-            log.error(str(result.appDescription))
             self.handler.remove(self)
             return
         log.info('return for live tv stop')
