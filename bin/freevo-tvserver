@@ -37,16 +37,16 @@ import sys
 import pwd
 import logging
 
-# kaa imports
-import kaa
-import kaa.notifier
-import kaa.epg
-
 # insert freevo path information
 __site__ = '../lib/python%s.%s/site-packages' % sys.version_info[:2]
 __site__ = os.path.normpath(os.path.join(os.path.dirname(__file__), __site__))
 if not __site__ in sys.path:
     sys.path.insert(0, __site__)
+
+# kaa imports
+import kaa
+import kaa.notifier
+import kaa.epg
 
 # create logger objects in conf
 from freevo.tvserver import config
