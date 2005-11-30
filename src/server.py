@@ -37,7 +37,6 @@ import os
 import sys
 import time
 import logging
-import notifier
 
 # kaa.epg
 import kaa.epg
