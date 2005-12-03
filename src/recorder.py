@@ -137,7 +137,7 @@ class RecorderList(object):
 
 
     def mbus_eventhandler(self, event):
-        addr = event.header.srcAdr
+        addr = event.header.source
         args = event.payload[0].args
         name = event.payload[0].name
         for r in self.recorder:
