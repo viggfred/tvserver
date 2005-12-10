@@ -252,7 +252,7 @@ def rate(devices, best_rating):
         for r in d.rec:
             rating += (0.1 * d.rating + 1) * r.priority
             if len(r.conflict_padding):
-                rating += rate_conflict([[ r ] + r.conflict_padding])
+                rating += rate_conflict([r.conflict_padding [ r ]])
 
     if rating > best_rating:
         # remember
