@@ -116,7 +116,7 @@ class RecorderList(object):
             return
 
         if entity.present:
-            entity.call('devices.list', Callback(self.mbus_list_cb, entity))
+            entity.call('device.list', Callback(self.mbus_list_cb, entity))
             return
 
         for r in self.recorder[:]:
@@ -150,7 +150,7 @@ class RecorderList(object):
                 continue
             break
         else:
-            log.error('unable to find recorder for event')
+            log.error('unable to find recorder for event %s' % event.payload[0].args)
             return True
 
         if name.endswith('started'):
