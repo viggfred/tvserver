@@ -45,7 +45,7 @@ from kaa.notifier import Timer, OneShotTimer
 
 # freevo imports
 import freevo.fxdparser
-from freevo.mcomm import RPCServer, RPCError, RPCReturn
+import freevo.ipc
 
 # record imports
 import config
@@ -59,8 +59,7 @@ import conflict
 # get logging object
 log = logging.getLogger('record')
 
-
-class RecordServer(RPCServer):
+class RecordServer(object):
     """
     Class for the recordserver. It handles the rpc calls and checks the
     schedule for recordings and favorites.
@@ -68,7 +67,27 @@ class RecordServer(RPCServer):
     LIVE_TV_ID = 0
     
     def __init__(self):
-        RPCServer.__init__(self, 'recordserver')
+        mbus = freevo.ipc.Instance('tvserver')
+        mbus.connect_rpc(self.rpc_recording_list, 'home-theatre.recording.list',
+                         add_source=True)
+        mbus.connect_rpc(self.rpc_recording_describe, 'home-theatre.recording.describe')
+        mbus.connect_rpc(self.rpc_recording_add, 'home-theatre.recording.add')
+        mbus.connect_rpc(self.rpc_recording_remove, 'home-theatre.recording.remove')
+        mbus.connect_rpc(self.rpc_recording_modify, 'home-theatre.recording.modify')
+        mbus.connect_rpc(self.rpc_watch_start, 'home-theatre.watch.start',
+                         add_source=True)
+        mbus.connect_rpc(self.rpc_watch_stop, 'home-theatre.watch.stop', add_source=True)
+
+        mbus.connect_rpc(self.rpc_favorite_update, 'home-theatre.favorite.update')
+        mbus.connect_rpc(self.rpc_favorite_add, 'home-theatre.favorite.add')
+        mbus.connect_rpc(self.rpc_favorite_list, 'home-theatre.favorite.list',
+                         add_source=True)
+
+        mbus.connect_rpc(self.rpc_status, 'home-theatre.status')
+
+        # add notify callback
+        mbus.signals['lost-entity'].connect(self.lost_entity)
+
         self.clients = []
         self.last_listing = []
         self.live_tv_map = {}
@@ -87,10 +106,6 @@ class RecordServer(RPCServer):
         self.save_timer = OneShotTimer(self.save, False)
         self.ps_timer = OneShotTimer(self.print_schedule, False)
 
-        # add notify callback
-        mbus = self.mbus_instance
-        mbus.register_entity_notification(self.entity_update)
-
         # create recorder
         self.recorder = recorder.RecorderList(self)
         
@@ -108,7 +123,7 @@ class RecordServer(RPCServer):
         """
         for c in self.clients:
             log.info('send update to %s' % c)
-            self.mbus_instance.send_event(c, 'record.list.update', update)
+            c.send('home-theatre.record.list.update', *update)
         # save fxd file
         self.save()
 
@@ -478,8 +493,8 @@ class RecordServer(RPCServer):
     # global mbus stuff
     #
 
-    def entity_update(self, entity):
-        if not entity.present and entity in self.clients:
+    def lost_entity(self, entity):
+        if entity in self.clients:
             log.info('lost client %s' % entity)
             self.clients.remove(entity)
             return
@@ -490,68 +505,39 @@ class RecordServer(RPCServer):
     # home.theatre.recording rpc commands
     #
 
-    def __rpc_recording_list__(self, addr, val):
+    def rpc_recording_list(self, source):
         """
         list the current recordins in a short form.
         result: [ ( id channel priority start stop status ) (...) ]
         """
-        if not addr in self.clients:
-            log.info('add client %s' % addr)
-            self.clients.append(addr)
-        self.parse_parameter(val, () )
+        if not source in self.clients:
+            log.info('add client %s' % source)
+            self.clients.append(source)
         ret = []
         for r in self.recordings:
             ret.append(r.short_list())
-        return RPCReturn(ret)
+        return ret
 
 
-    def __rpc_recording_describe__(self, addr, val):
+    def rpc_recording_describe(self, id):
         """
         send a detailed description about a recording
         parameter: id
         result: ( id name channel priority start stop status padding info )
         """
-        id = self.parse_parameter(val, ( int, ))
         for r in self.recordings:
             if r.id == id:
-                return RPCReturn(r.long_list())
-        return RPCError('Recording not found')
+                return r.long_list()
+        raise IndexError('Recording not found')
 
 
-    def __rpc_recording_add__(self, addr, val):
+    def rpc_recording_add(self, name, channel, priority, start, stop, info=()):
         """
         add a new recording
         parameter: name channel priority start stop optionals
         optionals: subtitle, url, start-padding, stop-padding, description
         """
-        if len(val) == 2 or len(val) == 5:
-            # missing optionals
-            val.append([])
-        if len(val) == 3:
-            # add by dbid
-            dbid, priority, info = \
-                  self.parse_parameter(val, ( int, int, dict ))
-            prog = kaa.epg.guide.get_program_by_id(dbid)
-            if not prog:
-                return RPCError('Unknown id')
-            channel = prog.channel.id
-            name = prog.name
-            start = prog.start
-            stop = prog.stop
-            if prog.subtitle and not info.has_key('subtitle'):
-                info['subtitle'] = prog.subtitle
-            if prog.episode and not info.has_key('episode'):
-                info['episode'] = prog.episode
-            if prog.description and not info.has_key('description'):
-                info['description'] = prog.description
-        else:
-            name, channel, priority, start, stop, info = \
-                  self.parse_parameter(val, ( unicode, unicode, int, int, int,
-                                              dict ) )
-        # fix description encoding
-        if info.has_key('description') and \
-               info['description'].__class__ == str:
-            info['description'] = Unicode(info['description'], 'UTF-8')
+        info = dict(info)
 
         log.info('recording.add: %s' % String(name))
         r = Recording(name, channel, priority, start, stop, info = info)
@@ -562,21 +548,20 @@ class RecordServer(RPCServer):
                 r.status   = SCHEDULED
                 r.favorite = False
                 # send update about the new recording
-                self.send_update(r.short_list())
+                self.send_update([r.short_list()])
                 self.check_recordings()
-                return RPCReturn(r.id)
-            return RPCError('Already scheduled')
+                return [ r.id ]
+            raise AttributeError('Already scheduled')
         self.recordings.append(r)
         self.check_recordings()
-        return RPCReturn(r.id - 1)
+        return [ r.id - 1 ]
 
 
-    def __rpc_recording_remove__(self, addr, val):
+    def rpc_recording_remove(self, id):
         """
         remove a recording
         parameter: id
         """
-        id = self.parse_parameter(val, ( int, ))
         log.info('recording.remove: %s' % id)
         for r in self.recordings:
             if r.id == id:
@@ -585,35 +570,61 @@ class RecordServer(RPCServer):
                 else:
                     r.status = DELETED
                 # send update about the new recording
-                self.send_update(r.short_list())
+                self.send_update([r.short_list()])
                 # update listing
                 self.check_recordings()
-                return RPCReturn()
-        return RPCError('Recording not found')
+                return []
+        raise IndexError('Recording not found')
 
 
-    def __rpc_watch_start__(self, addr, val):
+    def rpc_recording_modify(self, int, info):
+        """
+        modify a recording
+        parameter: id [ ( var val ) (...) ]
+        """
+        key_val = dict(info)
+        log.info('recording.modify: %s' % id)
+        for r in self.recordings:
+            if r.id == id:
+                if r.status == RECORDING:
+                    return RuntimeError('Currently recording')
+                cp = copy.copy(self.recordings[id])
+                for key in key_val:
+                    setattr(cp, key, key_val[key])
+                self.recordings[self.recordings.index(r)] = cp
+                # send update about the new recording
+                self.send_update([r.short_list()])
+                # update listing
+                self.check_recordings()
+                return []
+        return IndexError('Recording not found')
+
+
+    #
+    # home.theatre.watch rpc commands
+    #
+
+    def rpc_watch_start(self, source, channel):
         """
         live recording
         parameter: channel
         """
-        channel = self.parse_parameter(val, ( str, ))
         for c in kaa.epg.channels:
             if c.id == channel:
                 channel = c
                 break
         else:
-            return RPCError('channel %s not found' % channel)
+            raise IndexError('channel %s not found' % channel)
 
         if channel.registered:
             # Already sending a stream of this channel, reuse it
-            channel.registered.append(addr)
+            channel.registered.append(source)
 
             RecordServer.LIVE_TV_ID += 1
             id = RecordServer.LIVE_TV_ID
             self.live_tv_map[id] = channel
 
-            return RPCReturn((id, url))
+            return [ id, url ]
             
         # Find a device for recording. The device should be not recording
         # right now and for the next 5 minutes or recording on the same
@@ -623,7 +634,7 @@ class RecordServer(RPCServer):
         # recording right now.
         rec = self.recorder.best_recorder[channel.id]
         if not rec:
-            return RPCError('no recorder for %s found' % channel.id)
+            return RuntimeError('no recorder for %s found' % channel.id)
 
         url = 'udp://%s:%s' % (conf.LIVETV_URL, channel.port)
 
@@ -631,80 +642,57 @@ class RecordServer(RPCServer):
         rec_id = rec.start_livetv(channel.id, url)
         # save id and recorder in channel
         channel.recorder = rec, rec_id
-        channel.registered.append(addr)
+        channel.registered.append(source)
 
         RecordServer.LIVE_TV_ID += 1
         id = RecordServer.LIVE_TV_ID
         self.live_tv_map[id] = channel
 
         # return id and url
-        return RPCReturn((id, url))
+        return [ id, url ]
 
         
-    def __rpc_watch_stop__(self, addr, val):
+    def rpc_watch_stop(self, source, id):
         """
         live recording
         parameter: id
         """
-        id = self.parse_parameter(val, ( int, ))
         log.info('stop live tv with id %s' % id)
         if not id in self.live_tv_map:
-            return RPCError('invalid id %s' % id)
+            return IndexError('invalid id %s' % id)
             
         channel = self.live_tv_map[id]
         del self.live_tv_map[id]
 
         # remove watcher
-        if not addr in channel.registered:
-            return RPCError('%s is not watching channel', addr)
+        if not source in channel.registered:
+            raise RuntimeError('%s is not watching channel', source)
             
-        channel.registered.remove(addr)
+        channel.registered.remove(source)
 
         if not channel.registered:
             # channel is no longer watched
             recorder, id = channel.recorder
             recorder.stop_livetv(id)
             
-        return RPCReturn()
+        return []
         
         
-    def __rpc_recording_modify__(self, addr, val):
-        """
-        modify a recording
-        parameter: id [ ( var val ) (...) ]
-        """
-        id, key_val = self.parse_parameter(val, ( int, dict ))
-        log.info('recording.modify: %s' % id)
-        for r in self.recordings:
-            if r.id == id:
-                if r.status == RECORDING:
-                    return RPCError('Currently recording')
-                cp = copy.copy(self.recordings[id])
-                for key in key_val:
-                    setattr(cp, key, key_val[key])
-                self.recordings[self.recordings.index(r)] = cp
-                # send update about the new recording
-                self.send_update(r.short_list())
-                # update listing
-                self.check_recordings()
-                return RPCReturn()
-        return RPCError('Recording not found')
-
 
     #
     # home.theatre.favorite rpc commands
     #
 
-    def __rpc_favorite_update__(self, addr=None, val=[]):
+    def rpc_favorite_update(self):
         """
         updates favorites with data from the database
         """
         self.check_current_recordings()
         self.check_favorites()
-        return RPCReturn()
+        return []
 
 
-    def __rpc_favorite_add__(self, addr, val):
+    def rpc_favorite_add(self, name, channels, priority, days, times, once):
         """
         add a favorite
         parameter: name channels priority days times
@@ -712,31 +700,32 @@ class RecordServer(RPCServer):
         days is a list of days ( 0 = Sunday - 6 = Saturday )
         times is a list of hh:mm-hh:mm
         """
-        name, channels, priority, days, times, once = \
-              self.parse_parameter(val, ( unicode, list, int, list, list,
-                                          bool ))
         log.info('favorite.add: %s' % String(name))
         f = Favorite(name, channels, priority, days, times, once)
         if f in self.favorites:
-            return RPCError('Already scheduled')
+            return NameError('Already scheduled')
         self.favorites.append(f)
-        return self.__rpc_favorite_update__()
+        self.rpc_favorite_update()
+        return []
 
 
-    def __rpc_favorite_list__(self, addr, val):
+    def rpc_favorite_list(self, source):
         """
         """
-        if not addr in self.clients:
-            log.info('add client %s' % addr)
-            self.clients.append(addr)
-        self.parse_parameter(val, () )
+        if not source in self.clients:
+            log.info('add client %s' % source)
+            self.clients.append(source)
         ret = []
         for f in self.favorites:
             ret.append(f.long_list())
-        return RPCReturn(ret)
+        return ret
 
 
-    def __rpc_status__(self, addr, val):
+    #
+    # home.theatre.status rpc command
+    #
+
+    def rpc_status(self):
         """
         Send status on rpc status request.
         """
@@ -751,6 +740,9 @@ class RecordServer(RPCServer):
             status['busy'] = max(1, int(busy / 60) + 1)
 
         # find next scheduled recordings for wakeup
+        # FIXME: what about CONFLICT? we don't need to start the server
+        # for a normal conflict, but we may need it when tvdev is not running
+        # right now.
         rec = filter(lambda r: r.status == SCHEDULED and \
                      r.start - r.start_padding > ctime, self.recordings)
         if rec:
@@ -758,4 +750,4 @@ class RecordServer(RPCServer):
             status['wakeup'] = rec[0].start - rec[0].start_padding
 
         # return results
-        return RPCReturn(status)
+        return status

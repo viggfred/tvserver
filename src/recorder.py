@@ -42,7 +42,7 @@ from kaa.notifier import OneShotTimer, Callback
 import kaa.epg
 
 # freevo core imports
-import freevo.mcomm
+import freevo.ipc
 
 # record imports
 import config
@@ -64,11 +64,12 @@ class RecorderList(object):
         self.best_recorder = {}
         self.server = server
 
-        # add notify callback
-        server.mbus_instance.register_entity_notification(self.mbus_entity_update)
-        server.mbus_instance.register_event('vdr.started', self.mbus_eventhandler)
-        server.mbus_instance.register_event('vdr.stopped', self.mbus_eventhandler)
+        mbus = freevo.ipc.Instance('tvserver')
+        mbus.signals['new-entity'].connect(self.new_entity)
 
+        # add notify callback
+        mbus.events['home-theatre.vdr.started'].connect(self.mbus_eventhandler)
+        mbus.events['home-theatre.vdr.stopped'].connect(self.mbus_eventhandler)
 
 
     def append(self, recorder):
@@ -107,53 +108,46 @@ class RecorderList(object):
         return self.recorder.__iter__()
 
 
-    def mbus_entity_update(self, entity):
+    def new_entity(self, entity):
         """
         Update recorders on entity changes.
         """
         if not entity.matches(DAEMON):
             # no recorder
-            return
+            return True
 
-        if entity.present:
-            entity.call('device.list', Callback(self.mbus_list_cb, entity))
-            return
-
-        for r in self.recorder[:]:
-            if r.entity == entity:
-                log.info('lost recorder %s', r)
-                self.remove(r)
+        entity.rpc('home-theatre.device.list', self.mbus_list_cb, entity).call()
+        return True
 
 
     def mbus_list_cb(self, result, entity):
         """
         RPC return for device.list()
         """
-        if isinstance(result, freevo.mcomm.RPCError):
-            log.error(str(result))
+        if not result:
+            log.error(result)
             return
-        for device in result.arguments:
+        for device in result:
             Recorder(entity, self, device)
 
 
     def mbus_eventhandler(self, event):
-        addr = event.header.source
-        args = event.payload[0].args
-        name = event.payload[0].name
         for r in self.recorder:
-            if r.entity.addr != addr:
+            if r.entity != event.source:
                 continue
             for rec in r.recordings:
-                if rec.id == args[0]:
+                if rec.id == event[0]:
                     break
             else:
                 continue
             break
         else:
-            log.error('unable to find recorder for event %s' % event.payload[0].args)
+            # FIXME: the recording may be changed in the last second to
+            # a different recorder
+            log.error('unable to find recorder for event %s' % event)
             return True
 
-        if name.endswith('started'):
+        if event.name.endswith('started'):
             self.server.start_recording(rec.recording)
         else:
             self.server.stop_recording(rec.recording)
@@ -188,16 +182,24 @@ class Recorder(object):
         self.recordings = []
         self.check_timer = OneShotTimer(self.check_recordings)
         self.livetv = {}
-        self.entity.call('device.describe', self.describe_cb, device)
+        self.entity.signals['lost-entity'].connect(self.lost_entity)
+        self.rpc = self.entity.rpc
+        self.rpc('home-theatre.device.describe', self.describe_cb).call(device)
         self.rating = 0
         self.mapping = config.EPG_MAPPING
         self.channel2epg = {}
         self.epg2channel = {}
 
+
     def __str__(self):
         return '<Recorder for %s>' % (self.name)
 
 
+    def lost_entity(self):
+        log.info('%s lost entity' % self)
+        self.handler.remove(self)
+
+        
     def sys_exit(self):
         config.conf.save()
         log.error('Unknown channels detected on device %s.' % self.device)
@@ -212,15 +214,15 @@ class Recorder(object):
         """
         RPC return for device.describe()
         """
-        if isinstance(result, freevo.mcomm.RPCError):
-            log.error(str(result))
+        if not result:
+            log.error(result)
             self.handler.remove(self)
             return
 
         self.possible_bouquets = []
 
         error = False
-        for bouquet in result.arguments[2]:
+        for bouquet in result[2]:
             self.possible_bouquets.append([])
             for channel in bouquet:
                 if channel in self.mapping:
@@ -251,7 +253,7 @@ class Recorder(object):
         if error:
             OneShotTimer(self.sys_exit).start(1)
             return
-        self.rating = result.arguments[1]
+        self.rating = result[1]
         self.update()
 
 
@@ -345,17 +347,18 @@ class Recorder(object):
                 channel  = self.epg2channel[rec.channel]
                 filename = self.get_url(rec)
                 rec.url  = filename
-                log.info('%s: schedule %s' % (self.name, String(rec.name)))
-                self.entity.call('vdr.record', self.start_recording_cb, self.device,
-                                 channel, remote.start, rec.stop + rec.stop_padding,
-                                 filename, ())
+                log.info('%s: schedule %s' % (String(self.name), String(rec.name)))
+                rpc = self.rpc('home-theatre.vdr.record', self.start_recording_cb)
+                rpc.call(self.device, channel, remote.start,
+                         rec.stop + rec.stop_padding, filename, ())
                 remote.id = IN_PROGRESS
                 break
             if not remote.valid:
                 # remove the recording
-                log.info('%s: remove %s' % (self.name, String(remote.recording.name)))
+                log.info('%s: remove %s' % (String(self.name), String(remote.recording.name)))
                 try:
-                    self.entity.call('vdr.remove', self.remove_recording_cb, remote.id)
+                    rpc = self.rpc('home-theatre.vdr.remove', self.start_recording_cb)
+                    rpc.call(remote_id)
                 except:
                     pass
                 self.recordings.remove(remote)
@@ -368,15 +371,15 @@ class Recorder(object):
         """
         Callback for vdr.record
         """
-        if isinstance(result, freevo.mcomm.RPCError):
-            log.error(str(result))
+        if not result:
+            log.error(result)
             self.handler.remove(self)
             return
 
         # result is an unique id
         for remote in self.recordings:
             if remote.id == IN_PROGRESS:
-                remote.id = result.arguments
+                remote.id = result[0]
                 break
         else:
             log.info('id not found')
@@ -389,8 +392,8 @@ class Recorder(object):
         """
         Callback for vdr.remove
         """
-        if isinstance(result, freevo.mcomm.RPCError):
-            log.error(str(result))
+        if not result:
+            log.error(result)
             self.handler.remove(self)
             return
         # check more recordings
@@ -405,8 +408,8 @@ class Recorder(object):
     def start_livetv(self, channel, url):
         log.info('start live tv')
 
-        self.entity.call('vdr.record', self.start_livetv_cb, self.device,
-                         self.epg2channel[channel], 0, 2147483647, url, ())
+        rpc = self.rpc('home-theatre.vdr.record', self.start_livetv_cb)
+        rpc.call(self.device, self.epg2channel[channel], 0, 2147483647, url, ())
         id = Recorder.next_livetv_id
         Recorder.next_livetv_id = id + 1
         self.livetv[id] = channel, None
@@ -418,13 +421,13 @@ class Recorder(object):
         """
         Callback for vdr.record for live tv
         """
-        if isinstance(result, freevo.mcomm.RPCError):
-            log.error(str(result))
+        if not result:
+            log.error(result)
             self.handler.remove(self)
             return
         log.info('return for live tv start')
         for key, value in self.livetv.items():
-            self.livetv[key] = value[0], result.arguments
+            self.livetv[key] = value[0], result[0]
             break
         else:
             log.error('key not found')
@@ -439,7 +442,7 @@ class Recorder(object):
         channel, remote_id = self.livetv[id]
         del self.livetv[id]
         if remote_id != None:
-            self.entity.call('vdr.remove', self.stop_livetv_cb, remote_id)
+            self.rpc('home-theatre.vdr.remove', self.stop_livetv_cb).call(remote_id)
         else:
             log.error('remote id is None')
         self.update()
@@ -449,8 +452,8 @@ class Recorder(object):
         """
         Callback for vdr.remove for live tv
         """
-        if isinstance(result, freevo.mcomm.RPCError):
-            log.error(str(result))
+        if not result:
+            log.error(result)
             self.handler.remove(self)
             return
         log.info('return for live tv stop')
