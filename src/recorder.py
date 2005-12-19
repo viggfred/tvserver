@@ -237,13 +237,13 @@ class Recorder(object):
                     error = True
                     # ok, new channel, try to guess mapping
                     for c in kaa.epg.channels:
-                        if channel == c.access_id:
+                        if Unicode(channel) == Unicode(c.access_id):
                             epgid = c.id
                             break
                     else:
                         normchannel = self.normalize_name(channel)
                         for c in kaa.epg.channels:
-                            if normchannel == self.normalize_name(c.name):
+                            if Unicode(normchannel) == Unicode(self.normalize_name(c.name)):
                                 epgid = c.id
                                 break
                         else:
