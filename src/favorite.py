@@ -100,9 +100,11 @@ class Favorite(object):
         Parse informations from a fxd node and set the internal variables.
         """
         for child in node.children:
-            for var in ('name', 'url', 'fxdname'):
+            for var in ('name', 'fxdname'):
                 if child.name == var:
                     setattr(self, var, parser.gettext(child))
+            if child.name == 'url':
+                self.url = String(parser.gettext(child))
             if child.name == 'once':
                 self.once = True
             if child.name == 'substring':
@@ -148,7 +150,7 @@ class Favorite(object):
         return False
 
 
-    def __fill_template(self, rec, text):
+    def __fill_template(self, rec, text, is_url):
         """
         Fill template like url and fxdname from the favorite to something
         specific for the recording.
@@ -162,15 +164,17 @@ class Favorite(object):
                     'time'     : hour_min,
                     'episode'  : rec.episode,
                     'subtitle' : rec.subtitle }
-        for o in options:
-            # remove bad chars
-            options[o] = String(options[o]).replace('/', '_')
+        if is_url:
+            # url is string and an extra '/' is not allowed. Replace '/'
+            # with '_' and also convert all args to string.
+            for o in options:
+                options[o] = String(options[o]).replace('/', '_')
         for pattern in re.findall('%\([a-z]*\)', text):
-            if not pattern[2:-1] in options:
+            if not str(pattern[2:-1]) in options:
                 options[pattern[2:-1]] = pattern
         text = re.sub('%\([a-z]*\)', lambda x: x.group(0)+'s', text)
         text = text % options
-        return text.rstrip(u' -_:')
+        return text.rstrip(' -_:')
 
 
     def add_data(self, rec):
@@ -184,14 +188,14 @@ class Favorite(object):
         if self.url:
             # add url template to recording
             try:
-                rec.url = String(self.__fill_template(rec, self.url) + '.suffix')
+                rec.url = String(self.__fill_template(rec, self.url, True) + '.suffix')
             except Exception, e:
                 log.exception('Error setting recording url')
                 rec.url = ''
         if self.fxdname:
             # add fxd name template to recording
             try:
-                rec.fxdname = self.__fill_template(rec, self.fxdname)
+                rec.fxdname = self.__fill_template(rec, self.fxdname, False)
             except Exception, e:
                 log.exception('Error setting recording fxd name:')
                 rec.fxdname = ''
