@@ -636,7 +636,7 @@ class RecordServer(object):
         if not rec:
             return RuntimeError('no recorder for %s found' % channel.id)
 
-        url = 'udp://%s:%s' % (conf.LIVETV_URL, channel.port)
+        url = 'udp://%s:%s' % (config.LIVETV_URL, channel.port)
 
         # no app is watching this channel right now, start recorder
         rec_id = rec.start_livetv(channel.id, url)
