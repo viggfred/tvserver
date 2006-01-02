@@ -45,7 +45,7 @@ import kaa.epg
 import freevo.ipc
 
 # record imports
-import config
+from config import config
 from record_types import *
 
 # get logging object
@@ -186,7 +186,6 @@ class Recorder(object):
         self.rpc = self.entity.rpc
         self.rpc('home-theatre.device.describe', self.describe_cb).call(device)
         self.rating = 0
-        self.mapping = config.EPG_MAPPING
         self.channel2epg = {}
         self.epg2channel = {}
 
@@ -201,9 +200,9 @@ class Recorder(object):
 
         
     def sys_exit(self):
-        config.conf.save()
+        config.save()
         log.error('Unknown channels detected on device %s.' % self.device)
-        log.error('Please check %s' % config.conf.filename)
+        log.error('Please check %s' % config.get_filename())
         log.error('Freevo guessed some settings, so maybe a new start will work\n')
         sys.exit(0)
 
@@ -225,8 +224,8 @@ class Recorder(object):
         for bouquet in result[2]:
             self.possible_bouquets.append([])
             for channel in bouquet:
-                if channel in self.mapping:
-                    epgid = self.mapping[channel] or channel
+                if channel in config.epg.mapping:
+                    epgid = config.epg.mapping[channel] or channel
                     if epgid in self.epg2channel:
                         # duplicate id, skip it
                         continue
@@ -243,12 +242,13 @@ class Recorder(object):
                     else:
                         normchannel = self.normalize_name(channel)
                         for c in kaa.epg.channels:
-                            if Unicode(normchannel) == Unicode(self.normalize_name(c.name)):
+                            if Unicode(normchannel) == \
+                                   Unicode(self.normalize_name(c.name)):
                                 epgid = c.id
                                 break
                         else:
                             epgid = ''
-                    self.mapping[channel] = epgid
+                    config.epg.mapping[channel] = epgid
 
         if error:
             OneShotTimer(self.sys_exit).start(1)
@@ -276,7 +276,7 @@ class Recorder(object):
             filename_array = { 'progname': String(rec.name),
                                'title'   : String(rec.subtitle) }
 
-            filemask = config.RECORD_FILEMASK % filename_array
+            filemask = config.record.filemask % filename_array
             filename = ''
             for letter in time.strftime(filemask, time.localtime(rec.start)):
                 if letter in string.ascii_letters + string.digits:
@@ -284,11 +284,11 @@ class Recorder(object):
                 elif filename and filename[-1] != '_':
                     filename += '_'
             filename = filename.rstrip(' -_:') + '.mpg'
-            filename = 'file:' + os.path.join(config.RECORD_DIR, filename)
+            filename = 'file:' + os.path.join(config.record.dir, filename)
         else:
             # check filename
             if rec.url.startswith('file:'):
-                filename = os.path.join(config.RECORD_DIR, rec.url[5:])
+                filename = os.path.join(config.record.dir, rec.url[5:])
                 if filename.endswith('.suffix'):
                     filename = os.path.splitext(filename)[0] + '.mpg'
                 filename = 'file:' + filename

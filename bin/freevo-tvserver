@@ -48,8 +48,11 @@ import kaa
 import kaa.notifier
 import kaa.epg
 
-# create logger objects in conf
-from freevo.tvserver import config
+# FIXME: create logger objects in conf
+import freevo.conf
+
+# create and read config
+from freevo.tvserver.config import config
 
 # get logging object
 log = logging.getLogger('record')
@@ -57,18 +60,22 @@ log = logging.getLogger('record')
 # set basic recording debug to info
 log.setLevel(logging.INFO)
 
-# change uid
-try:
-    if config.SERVER_UID and os.getuid() == 0:
-        os.setgid(config.SERVER_GID)
-        os.setuid(config.SERVER_UID)
-        os.environ['USER'] = pwd.getpwuid(os.getuid())[0]
-        os.environ['HOME'] = pwd.getpwuid(os.getuid())[5]
-except Exception, e:
-    log.warning('unable to set uid: %s' % e)
+# # change uid
+# try:
+#     if config.SERVER_UID and os.getuid() == 0:
+#         os.setgid(config.SERVER_GID)
+#         os.setuid(config.SERVER_UID)
+#         os.environ['USER'] = pwd.getpwuid(os.getuid())[0]
+#         os.environ['HOME'] = pwd.getpwuid(os.getuid())[5]
+# except Exception, e:
+#     log.warning('unable to set uid: %s' % e)
 
 # load the epg
-kaa.epg.connect(config.EPG_BACKEND, config.EPG_FILENAME)
+epg_filename = config.epg.database
+if epg_filename.find('$(DATADIR)') >= 0:
+    epg_filename = epg_filename.replace('$(DATADIR)', freevo.conf.DATADIR)
+
+kaa.epg.connect('sqlite2', epg_filename)
 kaa.epg.load()
 
 # import recordserver
@@ -76,12 +83,6 @@ from freevo.tvserver.server import RecordServer
 
 # start recordserver
 server = RecordServer()
-
-# start recorder for this machine
-if config.START_TVDEV:
-    os.environ['PATH'] = '%s:%s' % (os.path.dirname(__file__), os.environ['PATH'])
-    kaa.notifier.Process('freevo-tvdev').start()
-
 
 try:
     kaa.main()

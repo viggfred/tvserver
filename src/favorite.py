@@ -37,10 +37,10 @@ import time
 import logging
 
 # freevo imports
-import config
 from freevo import fxdparser
 
 # record imports
+from config import config
 from record_types import *
 
 # get logging object
@@ -76,8 +76,8 @@ class Favorite(object):
             start = int(m[0])*100 + int(m[1])
             stop  = int(m[2])*100 + int(m[3])
             self.times.append((start, stop))
-        self.start_padding = config.RECORD_START_PADDING
-        self.stop_padding  = config.RECORD_STOP_PADDING
+        self.start_padding = config.record.start_padding
+        self.stop_padding  = config.record.stop_padding
 
 
     def short_list(self):

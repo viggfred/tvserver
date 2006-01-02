@@ -44,7 +44,7 @@ from freevo import fxdparser
 # FIXME: from util.fxdimdb import FxdImdb, makeVideo
 
 # record imports
-import config
+from config import config
 from record_types import *
 
 # get logging object
@@ -96,8 +96,8 @@ class Recording(object):
         self.scheduled_start    = 0
         self.scheduled_stop     = 0
         
-        self.start_padding = config.RECORD_START_PADDING
-        self.stop_padding  = config.RECORD_STOP_PADDING
+        self.start_padding = config.record.start_padding
+        self.stop_padding  = config.record.stop_padding
         for i in info:
             if i == 'subtitle':
                 self.subtitle = Unicode(info[i])
