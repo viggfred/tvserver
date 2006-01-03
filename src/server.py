@@ -48,7 +48,7 @@ import freevo.fxdparser
 import freevo.ipc
 
 # record imports
-import config
+from config import config
 import recorder
 
 from record_types import *
@@ -636,7 +636,7 @@ class RecordServer(object):
         if not rec:
             return RuntimeError('no recorder for %s found' % channel.id)
 
-        url = 'udp://%s:%s' % (config.LIVETV_URL, channel.port)
+        url = 'udp://%s:%s' % (config.livetv_url, channel.port)
 
         # no app is watching this channel right now, start recorder
         rec_id = rec.start_livetv(channel.id, url)
