@@ -616,6 +616,8 @@ class RecordServer(object):
         else:
             raise IndexError('channel %s not found' % channel)
 
+        url = 'udp://%s:%s' % (config.livetv_url, channel.port)
+
         if channel.registered:
             # Already sending a stream of this channel, reuse it
             channel.registered.append(source)
@@ -635,8 +637,6 @@ class RecordServer(object):
         rec = self.recorder.best_recorder[channel.id]
         if not rec:
             return RuntimeError('no recorder for %s found' % channel.id)
-
-        url = 'udp://%s:%s' % (config.livetv_url, channel.port)
 
         # no app is watching this channel right now, start recorder
         rec_id = rec.start_livetv(channel.id, url)
