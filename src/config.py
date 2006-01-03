@@ -42,3 +42,12 @@ if os.getuid() > 0:
 
 # save the file again in case it did not exist or the variables changed
 config.save()
+
+# check if a record dir is set
+if not config.record.dir or not os.path.isdir(config.record.dir):
+    log.error('Please set record.dir to a valid directory.')
+    log.error('Check the global config file /etc/freevo/tvserver.conf.')
+    if os.getuid() > 0:
+        log.error('The personal config file is %s',
+                  os.path.join(cfgdir, 'tvserver.conf'))
+    sys.exit(0)
