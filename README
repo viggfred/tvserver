@@ -1,0 +1,50 @@
+Freevo TV Server
+
+
+The Freevo TV Server handles recording and live tv for Freevo. It uses
+freevo-tvdev to use the different card on the different machines.
+
+
+1. Limitations
+
+The EPG mapping is a little bit difficult right now, we are searching
+for a better way. You also need the tv_grab helper from Freevo to get
+the epg, later versions of the tvserver should include that.
+
+
+2. Requirements of setup
+
+You need to have tvdev running with a correct mbus setup. Please read
+the README file of the tvdev application. You also need to have XMLTV
+configured and a valid database. The default location for the database
+is /var/lib/freevo/epg.db and currect SVN requires pysqlite2 as
+backend. If you have an older database please rebuild it.
+
+
+3. Basic setup
+
+To setup freevo-tvserver, just start it. It will write a config file
+and stop again because record.dir is not defined. Please define it in
+the config file and check the file for other possible changes. The
+system wide config file is /etc/freevo/tvserver.conf and if not
+running as root, a user config file is ~/.freevo/tvserver.conf.
+
+Now start tvserver again and it should find the running tvdev (there
+should be a debug line showing the ip address and the devices, like
+"add <Recorder for 15782-0@192.168.1.2:dvb0>". Two seconds later the
+tvserver will stop again because he found new channels. Check the
+config file again, and the end is the epg mapping containing all
+channels found. Set the mapping to the correct xmltv id (there are
+some mappings guessed by the system, later we want a better automatic
+detection). If you don't have a mapping, just ignore the line. The
+mapping should now look like this
+
+epg.mapping[Das Erste] = ard.de
+epg.mapping[Doku KiKa] = 
+epg.mapping[EinsExtra] = extra.tvtoday.de
+epg.mapping[Eurosport] = eurosport.de
+epg.mapping[Info 3sat] = 
+epg.mapping[KABEL1] = kabel1.de
+
+Now you should be able to start the tvserver and it should not stop
+again.
