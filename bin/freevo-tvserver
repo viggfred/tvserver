@@ -78,16 +78,21 @@ if epg_filename.find('$(DATADIR)') >= 0:
 kaa.epg.connect('sqlite2', epg_filename)
 kaa.epg.load()
 
-# import recordserver
-from freevo.tvserver.server import RecordServer
+if len(sys.argv) > 1:
+    if sys.argv[1] == '-i':
+        # import interactive mode
+        from freevo.tvserver import interactive
+        
+    else:
+        sys.exit(1)
+else:
+    # import recordserver
+    from freevo.tvserver.server import RecordServer
 
-# start recordserver
-server = RecordServer()
+    # start recordserver
+    server = RecordServer()
 
-try:
-    kaa.main()
-except:
-    pass
+kaa.main()
 
 # print debug at the end
 log.info('terminate')
