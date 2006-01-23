@@ -326,7 +326,7 @@ class RecordServer(object):
         for f in copy.copy(self.favorites):
             # Now check all the favorites. Again, this could block but we
             # assume a reasonable number of favorites.
-            for p in kaa.epg.search(f.name, exact_match=True):
+            for p in kaa.epg.search(f.name, exact_match=not f.substring):
 
                 # FIXME: This keeps the main loop alive but is ugly.
                 # Change it to something better when kaa.epg is thread based
