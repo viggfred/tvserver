@@ -59,7 +59,7 @@ import conflict
 # get logging object
 log = logging.getLogger('record')
 
-class RecordServer(freevo.ipc.RPCServer):
+class RecordServer(object):
     """
     Class for the recordserver. It handles the rpc calls and checks the
     schedule for recordings and favorites.
@@ -67,10 +67,13 @@ class RecordServer(freevo.ipc.RPCServer):
     LIVE_TV_ID = 0
     
     def __init__(self):
-        freevo.ipc.RPCServer.__init__(self, 'tvserver')
+        mbus = freevo.ipc.Instance('tvserver')
+
+        # connect exposed functions
+        mbus.connect(self)
 
         # add notify callback
-        self.signals['lost-entity'].connect(self.lost_entity)
+        mbus.signals['lost-entity'].connect(self.lost_entity)
 
         self.clients = []
         self.last_listing = []
