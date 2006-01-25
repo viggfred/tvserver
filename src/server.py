@@ -59,7 +59,7 @@ import conflict
 # get logging object
 log = logging.getLogger('record')
 
-class RecordServer(object):
+class RecordServer(freevo.ipc.RPCServer):
     """
     Class for the recordserver. It handles the rpc calls and checks the
     schedule for recordings and favorites.
@@ -67,26 +67,10 @@ class RecordServer(object):
     LIVE_TV_ID = 0
     
     def __init__(self):
-        mbus = freevo.ipc.Instance('tvserver')
-        mbus.connect_rpc(self.rpc_recording_list, 'home-theatre.recording.list',
-                         add_source=True)
-        mbus.connect_rpc(self.rpc_recording_describe, 'home-theatre.recording.describe')
-        mbus.connect_rpc(self.rpc_recording_add, 'home-theatre.recording.add')
-        mbus.connect_rpc(self.rpc_recording_remove, 'home-theatre.recording.remove')
-        mbus.connect_rpc(self.rpc_recording_modify, 'home-theatre.recording.modify')
-        mbus.connect_rpc(self.rpc_watch_start, 'home-theatre.watch.start',
-                         add_source=True)
-        mbus.connect_rpc(self.rpc_watch_stop, 'home-theatre.watch.stop', add_source=True)
-
-        mbus.connect_rpc(self.rpc_favorite_update, 'home-theatre.favorite.update')
-        mbus.connect_rpc(self.rpc_favorite_add, 'home-theatre.favorite.add')
-        mbus.connect_rpc(self.rpc_favorite_list, 'home-theatre.favorite.list',
-                         add_source=True)
-
-        mbus.connect_rpc(self.rpc_status, 'home-theatre.status')
+        freevo.ipc.RPCServer.__init__(self, 'tvserver')
 
         # add notify callback
-        mbus.signals['lost-entity'].connect(self.lost_entity)
+        self.signals['lost-entity'].connect(self.lost_entity)
 
         self.clients = []
         self.last_listing = []
@@ -505,6 +489,7 @@ class RecordServer(object):
     # home.theatre.recording rpc commands
     #
 
+    @freevo.ipc.expose('home-theatre.recording.list', add_source=True)
     def rpc_recording_list(self, source):
         """
         list the current recordins in a short form.
@@ -519,6 +504,7 @@ class RecordServer(object):
         return ret
 
 
+    @freevo.ipc.expose('home-theatre.recording.describe')
     def rpc_recording_describe(self, id):
         """
         send a detailed description about a recording
@@ -531,6 +517,7 @@ class RecordServer(object):
         raise IndexError('Recording not found')
 
 
+    @freevo.ipc.expose('home-theatre.recording.add')
     def rpc_recording_add(self, name, channel, priority, start, stop, info=()):
         """
         add a new recording
@@ -557,6 +544,7 @@ class RecordServer(object):
         return [ r.id - 1 ]
 
 
+    @freevo.ipc.expose('home-theatre.recording.remove')
     def rpc_recording_remove(self, id):
         """
         remove a recording
@@ -577,6 +565,7 @@ class RecordServer(object):
         raise IndexError('Recording not found')
 
 
+    @freevo.ipc.expose('home-theatre.recording.modify')
     def rpc_recording_modify(self, int, info):
         """
         modify a recording
@@ -604,6 +593,7 @@ class RecordServer(object):
     # home.theatre.watch rpc commands
     #
 
+    @freevo.ipc.expose('home-theatre.watch.start', add_source=True)
     def rpc_watch_start(self, source, channel):
         """
         live recording
@@ -652,6 +642,7 @@ class RecordServer(object):
         return [ id, url ]
 
         
+    @freevo.ipc.expose('home-theatre.watch.stop', add_source=True)
     def rpc_watch_stop(self, source, id):
         """
         live recording
@@ -683,6 +674,7 @@ class RecordServer(object):
     # home.theatre.favorite rpc commands
     #
 
+    @freevo.ipc.expose('home-theatre.favorite.update')
     def rpc_favorite_update(self):
         """
         updates favorites with data from the database
@@ -692,6 +684,7 @@ class RecordServer(object):
         return []
 
 
+    @freevo.ipc.expose('home-theatre.favorite.add')
     def rpc_favorite_add(self, name, channels, priority, days, times, once):
         """
         add a favorite
@@ -709,6 +702,7 @@ class RecordServer(object):
         return []
 
 
+    @freevo.ipc.expose('home-theatre.favorite.list', add_source=True)
     def rpc_favorite_list(self, source):
         """
         """
@@ -725,6 +719,7 @@ class RecordServer(object):
     # home.theatre.status rpc command
     #
 
+    @freevo.ipc.expose('home-theatre.status')
     def rpc_status(self):
         """
         Send status on rpc status request.
