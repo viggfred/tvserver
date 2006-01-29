@@ -75,6 +75,10 @@ class RecordServer(object):
         # add notify callback
         mbus.signals['lost-entity'].connect(self.lost_entity)
 
+        # set status information
+        mbus.connect('freevo.ipc.status')
+        self.status = mbus.status
+        
         self.clients = []
         self.last_listing = []
         self.live_tv_map = {}
@@ -102,6 +106,10 @@ class RecordServer(object):
 
         # add schedule timer for SCHEDULE_TIMER / 3 seconds
         Timer(self.schedule).start(SCHEDULE_TIMER / 3)
+
+        # update status and start timer
+        self.update_status()
+        Timer(self.update_status).start(60)
 
         
     def send_update(self, update):
@@ -719,24 +727,26 @@ class RecordServer(object):
 
 
     #
-    # home.theatre.status rpc command
+    # mbus.status handling
     #
 
-    @freevo.ipc.expose('home-theatre.status')
-    def rpc_status(self):
+    def update_status(self):
         """
-        Send status on rpc status request.
+        Update status information evenry minute.
         """
-        status = {}
         ctime = time.time()
+
+        # reset status
+        self.status.set('busy', 0)
+        self.status.set('wakeup', 0)
 
         # find currently running recordings
         rec = filter(lambda r: r.status == RECORDING, self.recordings)
         if rec:
             # something is recording, add busy time of first recording
             busy = rec[0].stop + rec[0].stop_padding - ctime
-            status['busy'] = max(1, int(busy / 60) + 1)
-
+            self.status.set('busy', max(1, int(busy / 60) + 1))
+            
         # find next scheduled recordings for wakeup
         # FIXME: what about CONFLICT? we don't need to start the server
         # for a normal conflict, but we may need it when tvdev is not running
@@ -745,7 +755,6 @@ class RecordServer(object):
                      r.start - r.start_padding > ctime, self.recordings)
         if rec:
             # set wakeup time
-            status['wakeup'] = rec[0].start - rec[0].start_padding
+            self.status.set('wakeup', rec[0].start - rec[0].start_padding)
 
-        # return results
-        return status
+        return True
