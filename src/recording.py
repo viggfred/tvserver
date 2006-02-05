@@ -71,8 +71,7 @@ class Recording(object):
     NEXT_ID = 0
     
     def __init__(self, name = 'unknown', channel = 'unknown',
-                 priority = 0, start = 0, stop = 0, info = {},
-                 status = SCHEDULED ):
+                 priority = 0, start = 0, stop = 0, **info ):
 
         self.id       = Recording.NEXT_ID
         Recording.NEXT_ID += 1
@@ -82,7 +81,7 @@ class Recording(object):
         self.priority = priority
         self.start    = start
         self.stop     = stop
-        self.status   = status
+        self.status   = CONFLICT
         self.info     = {}
 
         self.subtitle    = ''
@@ -98,19 +97,16 @@ class Recording(object):
         
         self.start_padding = config.record.start_padding
         self.stop_padding  = config.record.stop_padding
-        for i in info:
-            if i == 'subtitle':
-                self.subtitle = Unicode(info[i])
-            elif i == 'description':
-                self.description = Unicode(info[i])
-            elif i == 'url':
-                self.url = String(info[i])
-            elif i == 'start-padding':
-                self.start_padding = int(info[i])
-            elif i == 'stop-padding':
-                self.stop_padding = int(info[i])
+        for key, value in info.items():
+            if key in ('subtitle', 'description'):
+                setattr(self, key, Unicode(value))
+            elif key == 'url':
+                self.url = String(value)
+            elif key in ('start-padding', 'stop_padding'):
+                setattr(self, key, int(value))
             else:
-                self.info[i] = Unicode(info[i])
+                self.info[key] = Unicode(value)
+
         self.recorder = None
         self.respect_start_padding = True
         self.respect_stop_padding = True

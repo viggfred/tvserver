@@ -38,10 +38,8 @@ import sys
 import time
 import logging
 
-# kaa.epg
-import kaa.epg
 import kaa.thumb
-from kaa.notifier import Timer, OneShotTimer
+from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
 
 # freevo imports
 import freevo.fxdparser
@@ -54,10 +52,14 @@ import recorder
 from record_types import *
 from recording import Recording
 from favorite import Favorite
-import conflict
+from scheduler import Scheduler
+from epg import EPG
 
 # get logging object
 log = logging.getLogger('record')
+
+# set some extra debug
+log.setLevel(logging.DEBUG)
 
 class RecordServer(object):
     """
@@ -72,19 +74,19 @@ class RecordServer(object):
         # connect exposed functions
         mbus.connect(self)
 
-        # add notify callback
-        mbus.signals['lost-entity'].connect(self.lost_entity)
-
         # set status information
         mbus.connect('freevo.ipc.status')
         self.status = mbus.status
+        self.send_event = mbus.send_event
         
-        self.clients = []
+        self.scheduler = Scheduler(self.scheduler_callback)
+        self.epg = EPG()
+        
         self.last_listing = []
         self.live_tv_map = {}
         # add port for channels and check if they are in live-tv mode
         port = 6000
-        for index, channel in enumerate(kaa.epg.channels):
+        for index, channel in enumerate(self.epg.channels()):
             channel.port = port + index
             channel.registered = []
         
@@ -93,16 +95,14 @@ class RecordServer(object):
         # load the recordings file
         self.load()
 
-        # timer to handle save and print debug in background
-        self.save_timer = OneShotTimer(self.save, False)
-        self.ps_timer = OneShotTimer(self.print_schedule, False)
+        # connect to recorder signals and create recorder
+        recorder.signals['start-recording'].connect(self.start_recording)
+        recorder.signals['stop-recording'].connect(self.stop_recording)
+        recorder.signals['changed'].connect(self.reschedule)
+        recorder.connect()
 
-        # create recorder
-        self.recorder = recorder.RecorderList(self)
-        
-        # start by checking the favorites
-        self.check_current_recordings()
-        self.check_favorites()
+        # start by checking the recordings/favorites
+        self.epg_update()
 
         # add schedule timer for SCHEDULE_TIMER / 3 seconds
         Timer(self.schedule).start(SCHEDULE_TIMER / 3)
@@ -111,27 +111,12 @@ class RecordServer(object):
         self.update_status()
         Timer(self.update_status).start(60)
 
-        
-    def send_update(self, update):
-        """
-        Send and updated list to the clients
-        """
-        for c in self.clients:
-            log.info('send update to %s' % c)
-            c.send('home-theatre.record.list.update', *update)
-        # save fxd file
-        self.save()
 
-
-    def print_schedule(self, schedule=True):
+    @execute_in_timer(OneShotTimer, 0.1, type='once')
+    def print_schedule(self):
         """
         Print current schedule (for debug only)
         """
-        if schedule:
-            if not self.ps_timer.active():
-                self.ps_timer.start(0.01)
-            return
-
         if hasattr(self, 'only_print_current'):
             # print only latest recordings
             all = False
@@ -154,67 +139,37 @@ class RecordServer(object):
             info += '%s\n' % f
         log.info(info)
 
+
+    def reschedule(self):
+        """
+        Reschedule all recordings.
+        """
+        self.scheduler.schedule(self.recordings)
+
         
-    def check_recordings(self, force=False):
-        """
-        Check the current recordings. This includes checking conflicts,
-        removing old entries. At the end, the timer is set for the next
-        recording.
-        """
-        ctime = time.time()
-        # remove informations older than one week
-        self.recordings = filter(lambda r: r.start > ctime - 60*60*24*7,
-                                 self.recordings)
-        # sort by start time
-        self.recordings.sort(lambda l, o: cmp(l.start,o.start))
-
-        to_check = (CONFLICT, SCHEDULED, RECORDING)
-
-        # check recordings we missed
-        for r in self.recordings:
-            if r.stop < ctime and r.status in to_check:
-                r.status = MISSED
-
-        # scan for conflicts
-        next_recordings = filter(lambda r: r.stop + r.stop_padding > ctime \
-                                 and r.status in to_check, self.recordings)
-
-        for r in next_recordings:
-            try:
-                r.recorder = self.recorder.best_recorder[r.channel]
-                if r.status != RECORDING:
-                    r.status = SCHEDULED
-                    r.respect_start_padding = True
-                    r.respect_stop_padding  = True
-            except KeyError:
-                r.recorder = None
-                r.status   = CONFLICT
-
-        if force:
-            # clear conflict resolve cache
-            conflict.clear_cache()
+    def scheduler_callback(self):
+        log.info('answer from scheduler')
             
-        # Resolve conflicts. This will resolve the conflicts for the
-        # next recordings now, the others will be resolved with a timer
-        conflict.resolve(next_recordings, self.recorder)
-
         # send update
         sending = []
         listing = []
+
         for r in self.recordings:
             short_list = r.short_list()
             listing.append(short_list)
             if not short_list in self.last_listing:
                 sending.append(short_list)
         self.last_listing = listing
-        self.send_update(sending)
+
+        # send update to all clients
+        self.send_event('home-theatre.record.list.update', *sending)
+
+        # save fxd file
+        self.save()
 
         # print some debug
         self.print_schedule()
         
-        # sort by start time
-        self.recordings.sort(lambda l, o: cmp(l.start,o.start))
-
         # schedule recordings in recorder
         self.schedule()
 
@@ -223,8 +178,17 @@ class RecordServer(object):
         """
         Schedule recordings on recorder for the next SCHEDULE_TIMER seconds.
         """
-        ctime = time.time()
         log.info('calling self.schedule')
+        # sort by start time
+        self.recordings.sort(lambda l, o: cmp(l.start,o.start))
+
+        # get current time
+        ctime = time.time()
+
+        # remove old recorderings
+        self.recordings = filter(lambda r: r.start > ctime - 60*60*24*7,
+                                 self.recordings)
+        # schedule current (== now + SCHEDULE_TIMER) recordings
         for r in self.recordings:
             if r.start > ctime + SCHEDULE_TIMER:
                 # do not schedule to much in the future
@@ -236,149 +200,32 @@ class RecordServer(object):
         return True
     
 
-    def check_current_recordings(self):
+    def epg_update(self):
         """
-        Check current recordings against the database/
+        Update recordings based on favorites and epg.
         """
-        ctime = time.time() + 60 * 15
-        recordings = filter(lambda r: r.start - r.start_padding > ctime \
-                            and r.status in (CONFLICT, SCHEDULED),
-                            self.recordings)
-
-        # list of changes
-        update = []
-        for rec in recordings:
-            # This could block the main loop. But we guess that there is
-            # a reasonable number of future recordings, not 1000 recordings
-            # that would block us here. Still, we need to find out if a very
-            # huge database with over 100 channels will slow the database
-            # down.
-
-            # FIXME: This keeps the main loop alive but is ugly.
-            # Change it to something better when kaa.epg is thread based
-            kaa.notifier.step(False)
-            
-            # Search epg for that recording. The recording should be at the
-            # same time, maybe it has moved +- 20 minutes. If the program
-            # moved a larger time interval, it won't be found again.
-            interval = (rec.start - 20 * 60, rec.start + 20 * 60)
-            results = kaa.epg.search(rec.name, rec.channel, exact_match=True,
-                                     interval = interval)
-            epginfo = None
-            changed = False
-            for p in results:
-                # check all results
-                if p.start == rec.start and p.stop == rec.stop:
-                    # found the recording
-                    epginfo = p
-                    break
-            else:
-                # try to find it
-                for p in results:
-                    if rec.start - 20 * 60 < p.start < rec.start + 20 * 60:
-                        # found it again, set new start and stop time
-                        old_info = str(rec)
-                        rec.start = p.start
-                        rec.stop = p.stop
-                        log.info('changed schedule\n%s\n%s' % (old_info, rec))
-                        changed = True
-                        epginfo = p
-                        break
-                else:
-                    log.info('unable to find recording in epg:\n%s' % rec)
-
-            if epginfo:
-                # check if attributes changed
-                if String(rec.description) != String(epginfo.description):
-                    log.info('description changed for %s' % String(rec.name))
-                    rec.description = epginfo.description
-                if String(rec.episode) != String(epginfo.episode):
-                    log.info('episode changed for %s' % String(rec.name))
-                    rec.episode = epginfo.episode
-                if String(rec.subtitle) != String(epginfo.subtitle):
-                    log.info('subtitle changed for %s' % String(rec.name))
-                    rec.subtitle = epginfo.subtitle
-
-            if changed:
-                update.append(rec.short_list())
-                
-        # send update about the recordings
-        self.send_update(update)
-
+        self.epg.check_all(self.favorites, self.recordings, self.reschedule)
+                              
         
-    def check_favorites(self):
-        """
-        Check favorites against the database and add them to the list of
-        recordings
-        """
-        t1 = time.time()
-
-        update = []
-        
-        # Check current scheduled recordings if the start time has changed.
-        # Only check recordings with start time greater 15 minutes from now
-        # to avoid changing running recordings
-        for f in copy.copy(self.favorites):
-            # Now check all the favorites. Again, this could block but we
-            # assume a reasonable number of favorites.
-            for p in kaa.epg.search(f.name, exact_match=not f.substring):
-
-                # FIXME: This keeps the main loop alive but is ugly.
-                # Change it to something better when kaa.epg is thread based
-                kaa.notifier.step(False)
-            
-                if not f.match(p.title, p.channel.id, p.start):
-                    continue
-
-                r = Recording(p.title, p.channel.id, f.priority,
-                              p.start, p.stop)
-                if r in self.recordings:
-                    # This does not only avoid adding recordings twice, it
-                    # also prevents from added a deleted favorite as active
-                    # again.
-                    continue
-                r.episode  = p.episode
-                r.subtitle = p.subtitle
-                r.description = p.description
-                log.info('added %s: %s (%s)' % (String(p.channel.id),
-                                                String(p.title), p.start))
-                f.add_data(r)
-                self.recordings.append(r)
-                update.append(r.short_list())
-                if f.once:
-                    self.favorites.remove(f)
-                    break
-
-        t2 = time.time()
-        log.info('check favorites took %s secs' % (t2-t1))
-        
-        # send update about the new recordings
-        self.send_update(update)
-
-        # now check the schedule again
-        self.check_recordings()
-
-        t2 = time.time()
-        log.info('everything scheduled after %s secs' % (t2-t1))
-        
-
     #
     # load / save fxd file with recordings and favorites
     #
 
-    def __load_recording(self, parser, node):
+    def fxd_load_recording(self, parser, node):
         """
         callback for <recording> in the fxd file
         """
         try:
             r = Recording()
             r.parse_fxd(parser, node)
+            if r.status == SCHEDULED:
+                r.status = CONFLICT
             self.recordings.append(r)
         except Exception, e:
             log.exception('recordserver.load_recording')
 
 
-    def __load_favorite(self, parser, node):
+    def fxd_load_favorite(self, parser, node):
         """
         callback for <favorite> in the fxd file
         """
@@ -398,22 +245,18 @@ class RecordServer(object):
         self.favorites = []
         try:
             fxd = freevo.fxdparser.FXD(self.fxdfile)
-            fxd.set_handler('recording', self.__load_recording)
-            fxd.set_handler('favorite', self.__load_favorite)
+            fxd.set_handler('recording', self.fxd_load_recording)
+            fxd.set_handler('favorite', self.fxd_load_favorite)
             fxd.parse()
         except Exception, e:
             log.exception('recordserver.load: %s corrupt:' % self.fxdfile)
 
 
-    def save(self, schedule=True):
+    @execute_in_timer(OneShotTimer, 1, type='override')
+    def save(self):
         """
         save the fxd file
         """
-        if schedule:
-            if not self.save_timer.active():
-                self.save_timer.start(0.01)
-            return
-        
         if not len(self.recordings) and not len(self.favorites):
             # do not save here, it is a bug I havn't found yet
             log.info('do not save fxd file')
@@ -433,7 +276,7 @@ class RecordServer(object):
 
 
     #
-    # function to change a status
+    # callbacks from the recorder
     #
 
     def start_recording(self, recording):
@@ -442,8 +285,10 @@ class RecordServer(object):
             return
         log.info('recording started')
         recording.status = RECORDING
-        # send update to mbus entities
-        self.send_update([recording.short_list()])
+        # send update to all clients
+        self.send_event('home-theatre.record.list.update', recording.short_list())
+        # save fxd file
+        self.save()
         # create fxd file
         recording.create_fxd()
         # print some debug
@@ -478,23 +323,13 @@ class RecordServer(object):
             log.info('failed: stopped %s secs to early' % \
                      (recording.stop - time.time()))
             recording.status = FAILED
-        # send update to mbus entities
-        self.send_update([recording.short_list()])
+        # send update to all clients
+        self.send_event('home-theatre.record.list.update', recording.short_list())
+        # save fxd file
+        self.save()
         # print some debug
         self.print_schedule()
         
-    
-    #
-    # global mbus stuff
-    #
-
-    def lost_entity(self, entity):
-        if entity in self.clients:
-            log.info('lost client %s' % entity)
-            self.clients.remove(entity)
-            return
-        return
-
     
     #
     # home.theatre.recording rpc commands
@@ -506,9 +341,6 @@ class RecordServer(object):
         list the current recordins in a short form.
         result: [ ( id channel priority start stop status ) (...) ]
         """
-        if not source in self.clients:
-            log.info('add client %s' % source)
-            self.clients.append(source)
         ret = []
         for r in self.recordings:
             ret.append(r.short_list())
@@ -538,20 +370,20 @@ class RecordServer(object):
         info = dict(info)
 
         log.info('recording.add: %s' % String(name))
-        r = Recording(name, channel, priority, start, stop, info = info)
+        r = Recording(name, channel, priority, start, stop, **info)
 
         if r in self.recordings:
             r = self.recordings[self.recordings.index(r)]
             if r.status == DELETED:
-                r.status   = SCHEDULED
+                r.status   = CONFLICT
                 r.favorite = False
-                # send update about the new recording
-                self.send_update([r.short_list()])
-                self.check_recordings()
+                # update schedule, this will also send an update to all
+                # clients registered.
+                self.reschedule()
                 return [ r.id ]
             raise AttributeError('Already scheduled')
         self.recordings.append(r)
-        self.check_recordings()
+        self.reschedule()
         return [ r.id - 1 ]
 
 
@@ -568,10 +400,9 @@ class RecordServer(object):
                     r.status = SAVED
                 else:
                     r.status = DELETED
-                # send update about the new recording
-                self.send_update([r.short_list()])
-                # update listing
-                self.check_recordings()
+                # update schedule, this will also send an update to all
+                # clients registered.
+                self.reschedule()
                 return []
         raise IndexError('Recording not found')
 
@@ -592,10 +423,9 @@ class RecordServer(object):
                 for key in key_val:
                     setattr(cp, key, key_val[key])
                 self.recordings[self.recordings.index(r)] = cp
-                # send update about the new recording
-                self.send_update([r.short_list()])
-                # update listing
-                self.check_recordings()
+                # update schedule, this will also send an update to all
+                # clients registered.
+                self.reschedule()
                 return []
         return IndexError('Recording not found')
 
@@ -610,7 +440,7 @@ class RecordServer(object):
         live recording
         parameter: channel
         """
-        for c in kaa.epg.channels:
+        for c in self.epg.channels():
             if c.id == channel:
                 channel = c
                 break
@@ -635,7 +465,7 @@ class RecordServer(object):
         
         # FIXME: right now we take one recorder no matter if it is
         # recording right now.
-        rec = self.recorder.best_recorder[channel.id]
+        rec = recorder.get_recorder(channel.id)
         if not rec:
             return RuntimeError('no recorder for %s found' % channel.id)
 
@@ -690,8 +520,7 @@ class RecordServer(object):
         """
         updates favorites with data from the database
         """
-        self.check_current_recordings()
-        self.check_favorites()
+        self.epg_update()
         return []
 
 
@@ -717,9 +546,6 @@ class RecordServer(object):
     def rpc_favorite_list(self, source):
         """
         """
-        if not source in self.clients:
-            log.info('add client %s' % source)
-            self.clients.append(source)
         ret = []
         for f in self.favorites:
             ret.append(f.long_list())

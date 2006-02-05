@@ -29,6 +29,8 @@
 #
 # -----------------------------------------------------------------------------
 
+__all__ = [ 'signals', 'connect', 'get_recorder' ]
+
 # python imports
 import os
 import sys
@@ -38,7 +40,7 @@ import copy
 import logging
 
 # kaa imports
-from kaa.notifier import OneShotTimer, Callback
+from kaa.notifier import OneShotTimer, Signal
 import kaa.epg
 
 # freevo core imports
@@ -51,18 +53,49 @@ from record_types import *
 # get logging object
 log = logging.getLogger('record')
 
+# global RecorderList object
+_recorder = None
+
+# signals for this module
+signals = { 'changed': Signal(),
+            'start-recording': Signal(),
+            'stop-recording': Signal()
+          }
+
+def connect():
+    """
+    Connect to mbus. This will create the global RecorderList object
+    """
+    global _recorder
+    if _recorder:
+        return False
+    _recorder = RecorderList()
+
+
+def get_recorder(channel=None):
+    """
+    Get recorder. If channel is given, return the best recorder for this
+    channel, if not, return all recorder objects.
+    """
+    if not _recorder:
+        raise RuntimeError('recorder not connected')
+    if channel:
+        return _recorder.best_recorder.get(channel)
+    return _recorder.recorder
+
+
+# ****************************************************************************
+# Internal stuff
+# ****************************************************************************
+
 # internal 'unique' ids
 UNKNOWN_ID  = -1
 IN_PROGRESS = -2
 
-# recording daemon
-DAEMON = {'type': 'home-theatre', 'module': 'tvdev'}
-
 class RecorderList(object):
-    def __init__(self, server):
+    def __init__(self):
         self.recorder = []
         self.best_recorder = {}
-        self.server = server
 
         mbus = freevo.ipc.Instance('tvserver')
         mbus.signals['new-entity'].connect(self.new_entity)
@@ -101,7 +134,8 @@ class RecorderList(object):
                         self.best_recorder[c] = p.rating, p, p.device
         for c in self.best_recorder:
             self.best_recorder[c] = self.best_recorder[c][1]
-        self.server.check_recordings(True)
+
+        signals['changed'].emit()
 
 
     def __iter__(self):
@@ -112,7 +146,7 @@ class RecorderList(object):
         """
         Update recorders on entity changes.
         """
-        if not entity.matches(DAEMON):
+        if not entity.matches({'type': 'home-theatre', 'module': 'tvdev'}):
             # no recorder
             return True
 
@@ -148,9 +182,9 @@ class RecorderList(object):
             return True
 
         if event.name.endswith('started'):
-            self.server.start_recording(rec.recording)
+            signals['start-recording'].emit(rec.recording)
         else:
-            self.server.stop_recording(rec.recording)
+            signals['stop-recording'].emit(rec.recording)
         return True
 
 
@@ -198,7 +232,7 @@ class Recorder(object):
         log.info('%s lost entity' % self)
         self.handler.remove(self)
 
-        
+
     def sys_exit(self):
         config.save()
         log.error('Unknown channels detected on device %s.' % self.device)
@@ -208,7 +242,7 @@ class Recorder(object):
 
     def normalize_name(self, name):
         return String(name.replace('.', '').replace(' ', '')).upper().strip()
-    
+
     def describe_cb(self, result):
         """
         RPC return for device.describe()
@@ -355,7 +389,7 @@ class Recorder(object):
                 break
             if not remote.valid:
                 # remove the recording
-                log.info('%s: remove %s' % (String(self.name), String(remote.recording.name)))
+                log.info('%s: remove %s', self.name, remote.recording.name)
                 try:
                     rpc = self.rpc('home-theatre.vdr.remove', self.start_recording_cb)
                     rpc.call(remote_id)
