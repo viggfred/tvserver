@@ -25,3 +25,12 @@ The interactive mode needs much more work
 
 Maybe rename the start script. The name freevo-tvserver is too
 long. It could be freevo-tvsrv or even only tvserver or tvd.
+
+When kaa.epg is replaced by kaa.epg, move all the epg grabber logic
+into this module or kaa.epg. The tv_grab helper should be removed in
+freevo ui.
+
+Make it possible to send the current channel list over mbus. Other
+parts of Freevo should not use the db to find all possible channels,
+they should ask the tvserver and after that request the data from
+kaa.epg on that channels (some may not even in the db).
