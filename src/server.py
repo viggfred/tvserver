@@ -357,7 +357,7 @@ class RecordServer(object):
         for r in self.recordings:
             if r.id == id:
                 return r.long_list()
-        raise IndexError('Recording not found')
+        raise IndexError('Recording %s (%s) not found', id, type(id))
 
 
     @freevo.ipc.expose('home-theatre.recording.add')
