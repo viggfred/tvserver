@@ -36,8 +36,9 @@ import re
 import time
 import logging
 
-# freevo imports
-from freevo import fxdparser
+# kaa imports
+from kaa.base import libxml2
+from kaa.base.strutils import unicode_to_str
 
 # record imports
 from config import config
@@ -55,13 +56,13 @@ class Favorite(object):
     Base class for a favorite.
     """
     NEXT_ID = 0
-    
+
     def __init__(self, name = 'unknown', channels = [],
                  priority = 0, days = [], times = [], once = False,
-                 substring = False):
+                 substring = False, node=None):
         self.id        = Favorite.NEXT_ID
         Favorite.NEXT_ID += 1
-        
+
         self.name      = name
         self.channels  = channels
         self.priority  = priority
@@ -79,6 +80,41 @@ class Favorite(object):
         self.start_padding = config.record.start_padding
         self.stop_padding  = config.record.stop_padding
 
+        if not node:
+            return
+
+        # Parse informations from a fxd node and set the internal variables.
+        for child in node:
+            for var in ('name', 'fxdname'):
+                if child.name == var:
+                    setattr(self, var, child.content)
+            if child.name == 'url':
+                self.url = unicode_to_str(child.content)
+            if child.name == 'once':
+                self.once = True
+            if child.name == 'substring':
+                self.substring = True
+            if child.name == 'channels':
+                self.channels = []
+                for v in child.content.split(' '):
+                    self.channels.append(v)
+            if child.name == 'days':
+                self.days = []
+                for v in child.content.split(' '):
+                    self.days.append(int(v))
+            if child.name == 'times':
+                self.times = []
+                for v in child.content.split(' '):
+                    m = _time_re.match(v).groups()
+                    start = int(m[0])*100 + int(m[1])
+                    stop  = int(m[2])*100 + int(m[3])
+                    self.times.append((start, stop))
+            if child.name == 'padding':
+                self.start_padding = int(child.getattr('start'))
+                self.stop_padding  = int(child.getattr('stop'))
+            if child.name == 'priority':
+                setattr(self, 'priority', int(child.content))
+
 
     def short_list(self):
         """
@@ -94,41 +130,6 @@ class Favorite(object):
         return self.id, self.name, self.channels, self.priority, self.days, \
                self.times, self.once, self.substring
 
-
-    def parse_fxd(self, parser, node):
-        """
-        Parse informations from a fxd node and set the internal variables.
-        """
-        for child in node.children:
-            for var in ('name', 'fxdname'):
-                if child.name == var:
-                    setattr(self, var, parser.gettext(child))
-            if child.name == 'url':
-                self.url = String(parser.gettext(child))
-            if child.name == 'once':
-                self.once = True
-            if child.name == 'substring':
-                self.substring = True
-            if child.name == 'channels':
-                self.channels = []
-                for v in parser.gettext(child).split(' '):
-                    self.channels.append(v)
-            if child.name == 'days':
-                self.days = []
-                for v in parser.gettext(child).split(' '):
-                    self.days.append(int(v))
-            if child.name == 'times':
-                self.times = []
-                for v in parser.gettext(child).split(' '):
-                    m = _time_re.match(v).groups()
-                    start = int(m[0])*100 + int(m[1])
-                    stop  = int(m[2])*100 + int(m[3])
-                    self.times.append((start, stop))
-            if child.name == 'padding':
-                self.start_padding = int(parser.getattr(child, 'start'))
-                self.stop_padding  = int(parser.getattr(child, 'stop'))
-            if child.name == 'priority':
-                setattr(self, 'priority', int(parser.gettext(child)))
 
     def match(self, name, channel, start):
         """
@@ -223,37 +224,31 @@ class Favorite(object):
                (self.id, String(name), self.priority, once, substring)
 
 
-    def __fxd__(self, fxd):
+    def __xml__(self):
         """
         Dump informations about the favorite in a fxd file node.
         """
-        node = fxdparser.XMLnode('favorite', [ ('id', self.id ) ] )
+        node = libxml2.Node('favorite', id=self.id)
         for var in ('name', 'priority', 'url', 'fxdname'):
             if getattr(self, var):
-                subnode = fxdparser.XMLnode(var, [], getattr(self, var) )
-                fxd.add(subnode, node)
+                node.add_child(var, getattr(self, var))
         for var in ('channels', 'days'):
             s = ''
             for v in getattr(self, var):
                 s += '%s ' % v
-            subnode = fxdparser.XMLnode(var, [], s[:-1])
-            fxd.add(subnode, node)
+            node.add_child(var, s[:-1])
         s = ''
         for v in self.times:
             s += '%02d:%02d-%02d:%02d ' % (v[0] / 100, v[0] % 100,
                                            v[1] / 100, v[1] % 100)
-        subnode = fxdparser.XMLnode('times', [], s[:-1])
-        fxd.add(subnode, node)
+        node.add_child('times', s[:-1])
         if self.once:
-            subnode = fxdparser.XMLnode('once')
-            fxd.add(subnode, node)
+            node.add_child('once')
         if self.substring:
-            subnode = fxdparser.XMLnode('substring')
-            fxd.add(subnode, node)
-        padding = fxdparser.XMLnode('padding', [ ('start', self.start_padding),
-                                                 ('stop', self.stop_padding) ])
-        fxd.add(padding, node)
+            node.add_child('substring')
+        node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
         return node
+
 
     def __cmp__(self, obj):
         """

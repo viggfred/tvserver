@@ -41,9 +41,7 @@ import os
 
 # kaa imports
 from kaa.base import libxml2
-
-# freevo imports
-from freevo import fxdparser
+from kaa.base.strutils import unicode_to_str, str_to_unicode
 
 # record imports
 from config import config
@@ -71,13 +69,14 @@ class Recording(object):
     Base class for a recording.
     """
     NEXT_ID = 0
-    
+
     def __init__(self, name = 'unknown', channel = 'unknown',
-                 priority = 0, start = 0, stop = 0, **info ):
+                 priority = 0, start = 0, stop = 0, node=None,
+                 **info ):
 
         self.id       = Recording.NEXT_ID
         Recording.NEXT_ID += 1
-        
+
         self.name     = name
         self.channel  = channel
         self.priority = priority
@@ -96,7 +95,7 @@ class Recording(object):
         self.scheduled_recorder = None
         self.scheduled_start    = 0
         self.scheduled_stop     = 0
-        
+
         self.start_padding = config.record.start_padding
         self.stop_padding  = config.record.stop_padding
         for key, value in info.items():
@@ -112,6 +111,29 @@ class Recording(object):
         self.recorder = None
         self.respect_start_padding = True
         self.respect_stop_padding = True
+
+        if not node:
+            return
+
+        # Parse informations from a fxd node and set the internal variables.
+        for child in node.children:
+            for var in ('name', 'channel', 'status', 'subtitle', 'fxdname',
+                        'episode', 'description'):
+                if child.name == var:
+                    setattr(self, var, child.content)
+            if child.name == 'url':
+                self.url = unicode_to_str(child.content)
+            if child.name == 'priority':
+                self.priority = int(child.content)
+            if child.name == 'padding':
+                self.start_padding = int(child.getattr('start'))
+                self.stop_padding  = int(child.getattr('stop'))
+            if child.name == 'timer':
+                self.start = _time2int(child.getattr('start'))
+                self.stop  = _time2int(child.getattr('stop'))
+            if child.name == 'info':
+                for info in child.children:
+                    self.info[info.name] = info.content
 
 
     def short_list(self):
@@ -140,34 +162,6 @@ class Recording(object):
                info
 
 
-    def parse_fxd(self, parser, node):
-        """
-        Parse informations from a fxd node and set the internal variables.
-        """
-        for child in node.children:
-            for var in ('name', 'channel', 'status', 'subtitle', 'fxdname',
-                        'episode', 'description'):
-                if child.name == var:
-                    setattr(self, var, parser.gettext(child))
-            if child.name == 'url':
-                self.url = String(parser.gettext(child))
-            if child.name == 'priority':
-                self.priority = int(parser.gettext(child))
-            if child.name == 'padding':
-                self.start_padding = int(parser.getattr(child, 'start'))
-                self.stop_padding  = int(parser.getattr(child, 'stop'))
-            if child.name == 'timer':
-                self.start = _time2int(parser.getattr(child, 'start'))
-                self.stop  = _time2int(parser.getattr(child, 'stop'))
-        parser.parse_info(node, self)
-        if self.status == 'recording':
-            log.warning('recording in status \'recording\'')
-            # Oops, we are in 'recording' status and this was saved.
-            # That means we are stopped while recording, set status to
-            # missed
-            self.status = 'missed'
-
-        
     def __str__(self):
         """
         A simple string representation for a recording for debugging in the
@@ -189,12 +183,12 @@ class Recording(object):
             start_padding = int(self.start_padding/60)
         else:
             start_padding = 0
-            
+
         if self.respect_stop_padding:
             stop_padding = int(self.stop_padding/60)
         else:
             stop_padding = 0
-            
+
         return '%3d %10s %-25s %4d %s-%s %2s %2s %s' % \
                (self.id, String(channel), String(name),
                 self.priority, _int2time(self.start)[4:],
@@ -202,28 +196,24 @@ class Recording(object):
                 stop_padding, String(status))
 
 
-    def __fxd__(self, fxd):
+    def __xml__(self):
         """
         Dump informations about the recording in a fxd file node.
         """
-        node = fxdparser.XMLnode('recording', [ ('id', self.id ) ] )
-        for var in ('name', 'channel', 'priority', 'url', 'status',
+        node = libxml2.Node('recording', id=self.id)
+        for var in ('name', 'channel', 'priority', 'status',
                     'subtitle', 'fxdname', 'episode', 'description'):
             if getattr(self, var):
-                subnode = fxdparser.XMLnode(var, [],
-                                            Unicode(getattr(self, var)) )
-                fxd.add(subnode, node)
-        timer = fxdparser.XMLnode('timer', [ ('start', _int2time(self.start)),
-                                             ('stop', _int2time(self.stop)) ])
-        fxd.add(timer, node)
-        padding = fxdparser.XMLnode('padding', [ ('start', self.start_padding),
-                                                 ('stop', self.stop_padding) ])
-        fxd.add(padding, node)
-        info = fxdparser.XMLnode('info')
-        for i in self.info:
-            subnode = fxdparser.XMLnode(i, [], Unicode(self.info[i]) )
-            fxd.add(subnode, info)
-        fxd.add(info, node)
+                node.add_child(var, getattr(self, var))
+        if self.url:
+            node.add_child('url', str_to_unicode(self.url))
+
+        node.add_child('timer', start=_int2time(self.start), stop=_int2time(self.stop))
+        node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
+
+        info = node.add_child('info')
+        for key, value in self.info.items():
+            info.add_child(key, value)
         return node
 
 
@@ -254,7 +244,7 @@ class Recording(object):
                 self.status == RECORDING):
             # no update
             return
-            
+
         if self.scheduled_recorder:
             self.scheduled_recorder.remove(self)
         self.scheduled_recorder = recorder
@@ -272,7 +262,7 @@ class Recording(object):
             self.scheduled_recorder.remove(self)
         self.scheduled_recorder = None
 
-            
+
     def create_fxd(self):
         """
         Create a fxd file for the recording.

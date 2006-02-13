@@ -40,9 +40,9 @@ import logging
 
 import kaa.thumb
 from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
+from kaa.base import libxml2
 
 # freevo imports
-import freevo.fxdparser
 import freevo.ipc
 
 # record imports
@@ -67,7 +67,7 @@ class RecordServer(object):
     schedule for recordings and favorites.
     """
     LIVE_TV_ID = 0
-    
+
     def __init__(self):
         mbus = freevo.ipc.Instance('tvserver')
 
@@ -78,10 +78,10 @@ class RecordServer(object):
         mbus.connect('freevo.ipc.status')
         self.status = mbus.status
         self.send_event = mbus.send_event
-        
+
         self.scheduler = Scheduler(self.scheduler_callback)
         self.epg = EPG()
-        
+
         self.last_listing = []
         self.live_tv_map = {}
         # add port for channels and check if they are in live-tv mode
@@ -89,7 +89,7 @@ class RecordServer(object):
         for index, channel in enumerate(self.epg.channels()):
             channel.port = port + index
             channel.registered = []
-        
+
         # file to load / save the recordings and favorites
         self.fxdfile = freevo.conf.datafile('recordserver.fxd')
         # load the recordings file
@@ -128,7 +128,7 @@ class RecordServer(object):
 
         # print only from the last 24 hours
         maxtime = time.time() - 60 * 60 * 24
-        
+
         info = 'recordings:\n'
         for r in self.recordings:
             if all or r.stop > maxtime:
@@ -146,10 +146,10 @@ class RecordServer(object):
         """
         self.scheduler.schedule(self.recordings)
 
-        
+
     def scheduler_callback(self):
         log.info('answer from scheduler')
-            
+
         # send update
         sending = []
         listing = []
@@ -169,7 +169,7 @@ class RecordServer(object):
 
         # print some debug
         self.print_schedule()
-        
+
         # schedule recordings in recorder
         self.schedule()
 
@@ -198,44 +198,18 @@ class RecordServer(object):
             if r.status in (DELETED, CONFLICT):
                 r.remove()
         return True
-    
+
 
     def epg_update(self):
         """
         Update recordings based on favorites and epg.
         """
         self.epg.check_all(self.favorites, self.recordings, self.reschedule)
-                              
-        
+
+
     #
     # load / save fxd file with recordings and favorites
     #
-
-    def fxd_load_recording(self, parser, node):
-        """
-        callback for <recording> in the fxd file
-        """
-        try:
-            r = Recording()
-            r.parse_fxd(parser, node)
-            if r.status == SCHEDULED:
-                r.status = CONFLICT
-            self.recordings.append(r)
-        except Exception, e:
-            log.exception('recordserver.load_recording')
-
-
-    def fxd_load_favorite(self, parser, node):
-        """
-        callback for <favorite> in the fxd file
-        """
-        try:
-            f = Favorite()
-            f.parse_fxd(parser, node)
-            self.favorites.append(f)
-        except Exception, e:
-            log.exception('recordserver.load_favorite:')
-
 
     def load(self):
         """
@@ -244,12 +218,36 @@ class RecordServer(object):
         self.recordings = []
         self.favorites = []
         try:
-            fxd = freevo.fxdparser.FXD(self.fxdfile)
-            fxd.set_handler('recording', self.fxd_load_recording)
-            fxd.set_handler('favorite', self.fxd_load_favorite)
-            fxd.parse()
+            fxd = libxml2.Document(self.fxdfile, 'freevo')
         except Exception, e:
             log.exception('recordserver.load: %s corrupt:' % self.fxdfile)
+            sys.exit(1)
+
+        for child in fxd:
+            if child.name == 'recording':
+                try:
+                    r = Recording(node=child)
+                except Exception, e:
+                    log.exception('recordserver.load_recording')
+                    continue
+                if r.status == RECORDING:
+                    log.warning('recording in status \'recording\'')
+                    # Oops, we are in 'recording' status and this was saved.
+                    # That means we are stopped while recording, set status to
+                    # missed
+                    r.status = 'missed'
+                if r.status == SCHEDULED:
+                    # everything is a conflict for now
+                    r.status = CONFLICT
+                self.recordings.append(r)
+
+            if child.name == 'favorite':
+                try:
+                    f = Favorite(node=child)
+                except Exception, e:
+                    log.exception('recordserver.load_favorite:')
+                    continue
+                self.favorites.append(f)
 
 
     @execute_in_timer(OneShotTimer, 1, type='override')
@@ -257,22 +255,13 @@ class RecordServer(object):
         """
         save the fxd file
         """
-        if not len(self.recordings) and not len(self.favorites):
-            # do not save here, it is a bug I havn't found yet
-            log.info('do not save fxd file')
-            return
-        try:
-            log.info('save fxd file')
-            if os.path.isfile(self.fxdfile):
-                os.unlink(self.fxdfile)
-            fxd = freevo.fxdparser.FXD(self.fxdfile)
-            for r in self.recordings:
-                fxd.add(r)
-            for r in self.favorites:
-                fxd.add(r)
-            fxd.save()
-        except:
-            log.exception('lost the recordings.fxd, send me the trace')
+        log.info('save fxd file')
+        fxd = libxml2.Document(root='freevo')
+        for r in self.recordings:
+            fxd.add_child(r)
+        for f in self.favorites:
+            fxd.add_child(f)
+        fxd.save(self.fxdfile)
 
 
     #
@@ -294,7 +283,7 @@ class RecordServer(object):
         # print some debug
         self.print_schedule()
 
-    
+
     def stop_recording(self, recording):
         if not recording:
             log.info('live tv stopped')
@@ -329,8 +318,8 @@ class RecordServer(object):
         self.save()
         # print some debug
         self.print_schedule()
-        
-    
+
+
     #
     # home.theatre.recording rpc commands
     #
@@ -458,11 +447,11 @@ class RecordServer(object):
             self.live_tv_map[id] = channel
 
             return [ id, url ]
-            
+
         # Find a device for recording. The device should be not recording
         # right now and for the next 5 minutes or recording on the same
         # bouquet. And it should the recorder with the best priority.
-        
+
         # FIXME: right now we take one recorder no matter if it is
         # recording right now.
         rec = recorder.get_recorder(channel.id)
@@ -482,7 +471,7 @@ class RecordServer(object):
         # return id and url
         return [ id, url ]
 
-        
+
     @freevo.ipc.expose('home-theatre.watch.stop', add_source=True)
     def rpc_watch_stop(self, source, id):
         """
@@ -492,24 +481,24 @@ class RecordServer(object):
         log.info('stop live tv with id %s' % id)
         if not id in self.live_tv_map:
             return IndexError('invalid id %s' % id)
-            
+
         channel = self.live_tv_map[id]
         del self.live_tv_map[id]
 
         # remove watcher
         if not source in channel.registered:
             raise RuntimeError('%s is not watching channel', source)
-            
+
         channel.registered.remove(source)
 
         if not channel.registered:
             # channel is no longer watched
             recorder, id = channel.recorder
             recorder.stop_livetv(id)
-            
+
         return []
-        
-        
+
+
 
     #
     # home.theatre.favorite rpc commands
@@ -572,7 +561,7 @@ class RecordServer(object):
             # something is recording, add busy time of first recording
             busy = rec[0].stop + rec[0].stop_padding - ctime
             self.status.set('busy', max(1, int(busy / 60) + 1))
-            
+
         # find next scheduled recordings for wakeup
         # FIXME: what about CONFLICT? we don't need to start the server
         # for a normal conflict, but we may need it when tvdev is not running
