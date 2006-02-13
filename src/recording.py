@@ -39,9 +39,11 @@ import re
 import logging
 import os
 
+# kaa imports
+from kaa.base import libxml2
+
 # freevo imports
 from freevo import fxdparser
-# FIXME: from util.fxdimdb import FxdImdb, makeVideo
 
 # record imports
 from config import config
@@ -278,34 +280,36 @@ class Recording(object):
         if not self.url.startswith('file:'):
             return
 
-        # FIXME:
-        return
-        
-        filename = self.url[5:]
+        # create root node
+        fxd = libxml2.Document(root='freevo')
 
-        fxd = FxdImdb()
-        (filebase, fileext) = os.path.splitext(filename)
-        fxd.setFxdFile(filebase, overwrite = True)
-
-        video = makeVideo('file', 'f1', os.path.basename(filename))
-        fxd.setVideo(video)
-        if self.episode:
-            fxd.info['episode'] = fxd.str2XML(self.episode)
-            if self.subtitle:
-                fxd.info['subtitle'] = fxd.str2XML(self.subtitle)
-        elif self.subtitle:
-            fxd.info['tagline'] = fxd.str2XML(self.subtitle)
-        if self.description:
-            fxd.info['plot'] = fxd.str2XML(self.description)
-        for i in self.info:
-            fxd.info[i] = fxd.str2XML(self.info[i])
-
-        fxd.info['runtime'] = '%s min.' % int((self.stop - self.start) / 60)
-        fxd.info['record-start'] = str(int(time.time()))
-        fxd.info['record-stop'] = str(self.stop + self.stop_padding)
-        fxd.info['year'] = time.strftime('%m-%d %H:%M', time.localtime(self.start))
+        # create <movie> with title
+        title = self.name
         if self.fxdname:
             fxd.title = self.fxdname
-        else:
-            fxd.title = self.name
-        fxd.writeFxd()
+        movie = fxd.add_child('movie', title=title)
+
+        # add <video> to movie
+        video = movie.add_child('video')
+        video.add_child('file', os.path.basename(self.url[5:]), id='f1')
+
+        # add <info> to movie
+        info = movie.add_child('info')
+        if self.episode:
+            info.add_child('episode', self.episode)
+            if self.subtitle:
+                info.add_child('subtitle', self.subtitle)
+        elif self.subtitle:
+            info.add_child('tagline', self.subtitle)
+        if self.description:
+            info.add_child('plot', self.description)
+        for key, value in self.info.items():
+            info.add_child(key, value)
+
+        info.add_child('runtime', '%s min.' % int((self.stop - self.start) / 60))
+        info.add_child('record-start', int(time.time()))
+        info.add_child('record-stop', self.stop + self.stop_padding)
+        info.add_child('year', time.strftime('%m-%d %H:%M', time.localtime(self.start)))
+
+        # and save file
+        fxd.save(os.path.splitext(self.url[5:])[0] + '.fxd')
