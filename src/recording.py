@@ -72,7 +72,7 @@ class Recording(object):
 
     def __init__(self, name = 'unknown', channel = 'unknown',
                  priority = 0, start = 0, stop = 0, node=None,
-                 **info ):
+                 info={} ):
 
         self.id       = Recording.NEXT_ID
         Recording.NEXT_ID += 1

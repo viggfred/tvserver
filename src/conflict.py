@@ -289,7 +289,7 @@ class Conflict(object):
                         # FIXME: maybe start != stop
                         schedule[r.id][2] = False
                         for c in r.conflict_padding:
-                            schedule[r.id][3] = False
+                            schedule[c.id][3] = False
 
             for r in devices[-1].rec:
                 schedule[r.id] = [ CONFLICT, None, True, True ]

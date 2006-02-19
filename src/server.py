@@ -359,7 +359,7 @@ class RecordServer(object):
         info = dict(info)
 
         log.info('recording.add: %s' % String(name))
-        r = Recording(name, channel, priority, start, stop, **info)
+        r = Recording(name, channel, priority, start, stop, info=info)
 
         if r in self.recordings:
             r = self.recordings[self.recordings.index(r)]
