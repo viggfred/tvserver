@@ -167,7 +167,10 @@ class EPG(object):
 
             rec = Recording(p.title, p.channel.id, fav.priority,
                             p.start, p.stop, episode=p.episode,
-                            subtitle=p.subtitle, description=p.description)
+                            p.start, p.stop,
+			    info={ "episode":p.episode,
+				   "subtitle":p.subtitle,
+				   "description":p.description } )
 
             if rec in recordings:
                 # This does not only avoid adding recordings twice, it
