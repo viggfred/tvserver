@@ -166,7 +166,6 @@ class EPG(object):
                 continue
 
             rec = Recording(p.title, p.channel.id, fav.priority,
-                            p.start, p.stop, episode=p.episode,
                             p.start, p.stop,
 			    info={ "episode":p.episode,
 				   "subtitle":p.subtitle,
