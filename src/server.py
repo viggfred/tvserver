@@ -217,6 +217,10 @@ class RecordServer(object):
         """
         self.recordings = []
         self.favorites = []
+
+        if not os.path.isfile(self.fxdfile):
+            return
+
         try:
             fxd = libxml2.Document(self.fxdfile, 'freevo')
         except Exception, e:
