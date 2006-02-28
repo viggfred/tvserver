@@ -1,0 +1,144 @@
+#! /usr/bin/python
+# -*- coding: iso-8859-1 -*-
+# -----------------------------------------------------------------------------
+# freevo-epg - This process can be used to start a persistant EPG server and
+#              to also do EPG client operations like updating the database 
+#              ala tv_grab, searching from the command line, etc.
+# -----------------------------------------------------------------------------
+# $Id: $
+#
+# -----------------------------------------------------------------------------
+# Freevo - A Home Theater PC framework
+# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+#
+# Maintainers:    Dirk Meyer <dischi@freevo.org>
+#                 Rob Shortt <rob@tvcentric.com>
+#
+# Please see the file doc/CREDITS for a complete list of authors.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MER-
+# CHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+#
+# -----------------------------------------------------------------------------
+
+# python imports
+import logging
+import os
+import sys
+import textwrap
+import time
+
+# insert freevo path information
+__site__ = '../lib/python%s.%s/site-packages' % sys.version_info[:2]
+__site__ = os.path.normpath(os.path.join(os.path.dirname(__file__), __site__))
+if not __site__ in sys.path:
+    sys.path.insert(0, __site__)
+
+# kaa imports
+import kaa
+import kaa.notifier
+from kaa.epg2 import GuideServer
+
+# FIXME: create logger objects in conf
+import freevo.conf
+import freevo.ipc.epg as epg
+
+# get logging object
+log = logging.getLogger('epg')
+
+# set log level TODO: get and do this in config
+log.setLevel(logging.DEBUG)
+
+
+def update_progress(cur, total):
+    n = 0
+    if total > 0:
+        n = int((cur / float(total)) * 50)
+    sys.stdout.write("|%51s| %d / %d\r" % (("="*n + ">").ljust(51), cur, total))
+    sys.stdout.flush()
+    if cur == total:
+        print
+
+
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'update':
+        guide = epg.connect()
+        guide.signals["update_progress"].connect(update_progress)
+
+        # if guide.get_num_programs() == 0:
+        # update() is asynchronous so we enter kaa.main() and exit it
+        # once the update is finished.
+        guide.signals["updated"].connect(sys.exit)
+
+        if epg.config.use_xmltv == 1:
+            if not os.path.isfile(epg.config.xmltv_file):
+                log.error('problem with xmltv_file in config')
+
+            else:
+                log.debug('xmltv_file: %s', epg.config.xmltv_file)
+                guide.update("xmltv", str(epg.config.xmltv_file))
+
+        if epg.config.use_zap2it == 1:
+            guide.update("zap2it", username=str(epg.config.zap2it_username), 
+                                   passwd=str(epg.config.zap2it_password))
+        kaa.main()
+
+        print 'done'
+        sys.exit(0)
+
+    elif sys.argv[1] == 'search':
+        guide = epg.connect()
+
+        t0 = time.time()
+        if len(sys.argv) > 2:
+            keywords = " ".join(sys.argv[2:])
+            print "Results for '%s':" % keywords
+            programs = guide.search(keywords = keywords)
+            # Sort by start time
+            programs.sort(lambda a, b: cmp(a.start, b.start))
+        else:
+            print "All programs currently playing:"
+            programs = guide.search(time = (time.time(), time.time()+7200))
+            # Sort by channel
+            programs.sort(lambda a, b: cmp(a.channel.channel, b.channel.channel))
+        t1 = time.time()
+        
+        for program in programs:
+            start_time = time.strftime("%a %H:%M", time.localtime(program.start))
+            print "  %s (%s): %s" % (program.channel.channel, start_time, program.title.encode('latin-1'))
+            if program.desc:
+                print "\t* " + "\n\t  ".join(textwrap.wrap(program.desc.encode('latin-1'), 60))
+
+        print "- Queried %d programs; %s results; %.04f seconds" % \
+              (guide.get_num_programs(), len(programs), t1-t0)
+
+        #kaa.main()
+        #sys.exit(0)
+
+    elif sys.argv[1] == 'test':
+        # developers can put testing code here
+        pass
+
+    else:
+        sys.exit(1)
+
+else:
+    # start an EPG server that does NOT autoshutdown
+    log.info('starting local EPG server')
+    guide = GuideServer("epg", dbfile=epg.config.database, address=epg.config.address,
+                        log_file='%s/epg-%s.log' % (freevo.conf.DATADIR, os.getuid()),
+                        log_level=logging.DEBUG)
+    kaa.main()
+
+
