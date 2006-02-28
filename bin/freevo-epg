@@ -123,8 +123,16 @@ if len(sys.argv) > 1:
         print "- Queried %d programs; %s results; %.04f seconds" % \
               (guide.get_num_programs(), len(programs), t1-t0)
 
-        #kaa.main()
-        #sys.exit(0)
+    elif sys.argv[1] in ['help', '--help', '-h', '-H']:
+        print
+        print 'usage: %s <options> <args>' % sys.argv[0]
+        print 'options:'
+        print '          update - Update EPG with XMLTV or other sources.'
+        print '          search - Search EPG for programs.'
+        print '          help   - This message.'
+        print
+        print 'Be sure to check /etc/freevo/epg.conf for available config options.'
+        print
 
     elif sys.argv[1] == 'test':
         # developers can put testing code here
