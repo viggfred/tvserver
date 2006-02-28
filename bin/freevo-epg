@@ -127,11 +127,12 @@ if len(sys.argv) > 1:
         print
         print 'usage: %s <options> <args>' % sys.argv[0]
         print 'options:'
-        print '          update - Update EPG with XMLTV or other sources.'
-        print '          search - Search EPG for programs.'
-        print '          help   - This message.'
+        print '         update - Update EPG with XMLTV or other sources.'
+        print '         search - Search EPG for programs use args for search.'
+        print '         help   - This message.'
         print
-        print 'Be sure to check /etc/freevo/epg.conf for available config options.'
+        print ' With no options it will start an EPG server.'
+        print ' Be sure to check /etc/freevo/epg.conf for available config options.'
         print
 
     elif sys.argv[1] == 'test':
