@@ -111,12 +111,12 @@ if len(sys.argv) > 1:
             print "All programs currently playing:"
             programs = guide.search(time = (time.time(), time.time()+7200))
             # Sort by channel
-            programs.sort(lambda a, b: cmp(a.channel.channel, b.channel.channel))
+            programs.sort(lambda a, b: cmp(a.channel.tuner_id, b.channel.tuner_id))
         t1 = time.time()
         
         for program in programs:
             start_time = time.strftime("%a %H:%M", time.localtime(program.start))
-            print "  %s (%s): %s" % (program.channel.channel, start_time, program.title.encode('latin-1'))
+            print "  %s (%s): %s" % (program.channel.short_name, start_time, program.title.encode('latin-1'))
             if program.desc:
                 print "\t* " + "\n\t  ".join(textwrap.wrap(program.desc.encode('latin-1'), 60))
 
@@ -137,7 +137,25 @@ if len(sys.argv) > 1:
 
     elif sys.argv[1] == 'test':
         # developers can put testing code here
-        pass
+        guide = epg.connect()
+
+        if 1:
+            #print dir(guide)
+            cs = guide.get_channels()
+            cs.sort(lambda a, b: cmp(a.short_name, b.short_name))
+            cs.sort(lambda a, b: cmp(a.tuner_id, b.tuner_id))
+            for c in cs:
+                log.info('tuner_id: "%s" short_name: "%s" long_name: "%s"', c.tuner_id, c.short_name, c.long_name)
+
+        if 0:
+            programs = guide.search(keywords = keywords)
+            # Sort by start time
+            programs.sort(lambda a, b: cmp(a.start, b.start))
+
+        if 0:
+            programs = guide.search(time = (time.time(), time.time()+7200))
+            # Sort by channel
+            programs.sort(lambda a, b: cmp(a.channel.tuner_id, b.channel.tuner_id))
 
     else:
         sys.exit(1)
