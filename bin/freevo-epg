@@ -110,6 +110,12 @@ if len(sys.argv) > 1:
 
                     shutil.move(xmltvtmp, epg.config.xmltv_file)
 
+                else:
+                    log.error('xmltv grabbing failed and returned exit code %d.', ec >> 8)
+                    log.error('if you did not change your system, it's likely '+
+                              'that the site being grabbed did.  You might want to try '+
+                              'updating your xmltv: http://www.xmltv.org/')
+
             else:
                 log.info('not configured to run xmltv_grabber')
 
