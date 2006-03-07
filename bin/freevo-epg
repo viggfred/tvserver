@@ -53,6 +53,7 @@ from kaa.epg2 import GuideServer
 
 # FIXME: create logger objects in conf
 import freevo.conf
+import freevo.ipc
 import freevo.ipc.epg as epg
 
 # get logging object
@@ -60,6 +61,8 @@ log = logging.getLogger('epg')
 
 # set log level TODO: get and do this in config
 log.setLevel(logging.DEBUG)
+
+TVSERVER = {'type': 'home-theatre', 'module': 'tvserver'}
 
 
 def update_progress(cur, total):
@@ -70,6 +73,20 @@ def update_progress(cur, total):
     sys.stdout.flush()
     if cur == total:
         print
+
+
+def updated(result):
+    if result:
+        log.info('updated favorites')
+    else:
+        log.info('unable to update favorites')
+    sys.exit(0)
+
+
+def new_entity(entity):
+    if not entity.matches(TVSERVER):
+        return True
+    entity.rpc('home-theatre.favorite.update', updated).call()
 
 
 if len(sys.argv) > 1:
@@ -112,7 +129,7 @@ if len(sys.argv) > 1:
 
                 else:
                     log.error('xmltv grabbing failed and returned exit code %d.', ec >> 8)
-                    log.error('if you did not change your system, it's likely '+
+                    log.error('if you did not change your system, it is likely '+
                               'that the site being grabbed did.  You might want to try '+
                               'updating your xmltv: http://www.xmltv.org/')
 
@@ -130,14 +147,23 @@ if len(sys.argv) > 1:
         else:
             log.info('not configured to use xmltv')
 
-                    
 
         if epg.config.use_zap2it == 1:
             guide.update("zap2it", username=str(epg.config.zap2it_username), 
                                    passwd=str(epg.config.zap2it_password))
+
+        else:
+            log.info('not configured to use Zap2it')
+
+ 
+        log.info('connecting to tvserver')
+        mbus = freevo.ipc.Instance()
+        mbus.signals['new-entity'].connect(new_entity)
+        kaa.notifier.OneShotTimer(updated, False).start(2)
+
         kaa.main()
 
-        print 'done'
+        log.info('done')
         sys.exit(0)
 
     elif sys.argv[1] == 'search':
