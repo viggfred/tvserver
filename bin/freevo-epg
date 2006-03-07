@@ -35,6 +35,7 @@
 # python imports
 import logging
 import os
+import shutil
 import sys
 import textwrap
 import time
@@ -81,13 +82,49 @@ if len(sys.argv) > 1:
         # once the update is finished.
         guide.signals["updated"].connect(sys.exit)
 
-        if epg.config.use_xmltv == 1:
-            if not os.path.isfile(epg.config.xmltv_file):
-                log.error('problem with xmltv_file in config')
+        if epg.config.use_xmltv == 1 and \
+           os.path.isdir(os.path.dirname(epg.config.xmltv_file.split()[0])):
+
+            if epg.config.xmltv_grabber and \
+               os.path.isfile(epg.config.xmltv_grabber.split()[0]):
+                # NOTE: should the grabbing code be put into a seperate module
+                #       so other programs can cal it?
+
+                log.info('grabbing listings using %s', epg.config.xmltv_grabber)
+                xmltvtmp = '/tmp/TV.xml.tmp'
+                ec = os.system('%s --output %s --days %s' % (epg.config.xmltv_grabber,
+                                                             xmltvtmp,
+                                                             epg.config.xmltv_days))
+
+                if os.path.exists(xmltvtmp) and ec == 0:
+                    if os.path.isfile(epg.config.xmltv_sort):
+                        log.info('sorting listings')
+                        os.system('%s --output %s %s' % (epg.config.xmltv_sort,
+                                                         xmltvtmp+'.1',
+                                                         xmltvtmp))
+
+                        shutil.move(xmltvtmp+'.1', xmltvtmp)
+
+                    else:
+                        log.info('not configured to use xmltv_sort, skipping')
+
+                    shutil.move(xmltvtmp, epg.config.xmltv_file)
 
             else:
+                log.info('not configured to run xmltv_grabber')
+
+            if not os.path.isfile(epg.config.xmltv_file):
+                log.error('problem with xmltv_file, not updating EPG')
+           
+            else:
                 log.debug('xmltv_file: %s', epg.config.xmltv_file)
+                log.info('loading data into EPG...')
                 guide.update("xmltv", str(epg.config.xmltv_file))
+
+        else:
+            log.info('not configured to use xmltv')
+
+                    
 
         if epg.config.use_zap2it == 1:
             guide.update("zap2it", username=str(epg.config.zap2it_username), 
