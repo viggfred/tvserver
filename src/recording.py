@@ -40,7 +40,7 @@ import logging
 import os
 
 # kaa imports
-from kaa import libxml2
+from kaa import xml
 from kaa.strutils import unicode_to_str, str_to_unicode
 
 # record imports
@@ -200,7 +200,7 @@ class Recording(object):
         """
         Dump informations about the recording in a fxd file node.
         """
-        node = libxml2.Node('recording', id=self.id)
+        node = xml.Node('recording', id=self.id)
         for var in ('name', 'channel', 'priority', 'status',
                     'subtitle', 'fxdname', 'episode', 'description'):
             if getattr(self, var):
@@ -271,7 +271,7 @@ class Recording(object):
             return
 
         # create root node
-        fxd = libxml2.Document(root='freevo')
+        fxd = xml.Document(root='freevo')
 
         # create <movie> with title
         title = self.name

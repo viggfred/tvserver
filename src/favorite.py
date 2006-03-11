@@ -37,7 +37,7 @@ import time
 import logging
 
 # kaa imports
-from kaa import libxml2
+from kaa import xml
 from kaa.strutils import unicode_to_str
 
 # record imports
@@ -228,7 +228,7 @@ class Favorite(object):
         """
         Dump informations about the favorite in a fxd file node.
         """
-        node = libxml2.Node('favorite', id=self.id)
+        node = xml.Node('favorite', id=self.id)
         for var in ('name', 'priority', 'url', 'fxdname'):
             if getattr(self, var):
                 node.add_child(var, getattr(self, var))
