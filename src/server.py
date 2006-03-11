@@ -40,7 +40,7 @@ import logging
 
 import kaa.thumb
 from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
-from kaa.base import libxml2
+from kaa import libxml2
 
 # freevo imports
 import freevo.ipc

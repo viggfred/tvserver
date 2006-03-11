@@ -4,7 +4,7 @@ import os
 import sys
 import logging
 
-from kaa.base.config import Var, Group, Dict, List, Config
+from kaa.config import Var, Group, Dict, List, Config
 
 import freevo.conf
 

@@ -37,8 +37,8 @@ import time
 import logging
 
 # kaa imports
-from kaa.base import libxml2
-from kaa.base.strutils import unicode_to_str
+from kaa import libxml2
+from kaa.strutils import unicode_to_str
 
 # record imports
 from config import config

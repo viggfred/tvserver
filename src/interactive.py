@@ -2,7 +2,7 @@ import sys
 import logging
 
 import kaa.notifier
-from kaa.base.strutils import format
+from kaa.strutils import format
 
 import freevo.ipc
 from freevo.ipc import tvserver
