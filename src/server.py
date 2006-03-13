@@ -239,7 +239,7 @@ class RecordServer(object):
                     # Oops, we are in 'recording' status and this was saved.
                     # That means we are stopped while recording, set status to
                     # missed
-                    r.status = 'missed'
+                    r.status = MISSED
                 if r.status == SCHEDULED:
                     # everything is a conflict for now
                     r.status = CONFLICT
@@ -434,7 +434,7 @@ class RecordServer(object):
         parameter: channel
         """
         for c in self.epg.channels():
-            if c.id == channel:
+            if c.name == channel:
                 channel = c
                 break
         else:

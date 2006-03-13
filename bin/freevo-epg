@@ -99,33 +99,33 @@ if len(sys.argv) > 1:
         # once the update is finished.
         guide.signals["updated"].connect(sys.exit)
 
-        if epg.config.use_xmltv == 1 and \
-           os.path.isdir(os.path.dirname(epg.config.xmltv_file.split()[0])):
+        if epg.config.xmltv.activate == 1 and \
+           os.path.isdir(os.path.dirname(epg.config.xmltv.data_file.split()[0])):
 
-            if epg.config.xmltv_grabber and \
-               os.path.isfile(epg.config.xmltv_grabber.split()[0]):
+            if epg.config.xmltv.grabber and \
+               os.path.isfile(epg.config.xmltv.grabber.split()[0]):
                 # NOTE: should the grabbing code be put into a seperate module
                 #       so other programs can cal it?
 
-                log.info('grabbing listings using %s', epg.config.xmltv_grabber)
+                log.info('grabbing listings using %s', epg.config.xmltv.grabber)
                 xmltvtmp = '/tmp/TV.xml.tmp'
-                ec = os.system('%s --output %s --days %s' % (epg.config.xmltv_grabber,
+                ec = os.system('%s --output %s --days %s' % (epg.config.xmltv.grabber,
                                                              xmltvtmp,
-                                                             epg.config.xmltv_days))
+                                                             epg.config.xmltv.days))
 
                 if os.path.exists(xmltvtmp) and ec == 0:
-                    if os.path.isfile(epg.config.xmltv_sort):
+                    if os.path.isfile(epg.config.xmltv.sort):
                         log.info('sorting listings')
-                        os.system('%s --output %s %s' % (epg.config.xmltv_sort,
+                        os.system('%s --output %s %s' % (epg.config.xmltv.sort,
                                                          xmltvtmp+'.1',
                                                          xmltvtmp))
 
                         shutil.move(xmltvtmp+'.1', xmltvtmp)
 
                     else:
-                        log.info('not configured to use xmltv_sort, skipping')
+                        log.info('not configured to use tv_sort, skipping')
 
-                    shutil.move(xmltvtmp, epg.config.xmltv_file)
+                    shutil.move(xmltvtmp, epg.config.xmltv.data_file)
 
                 else:
                     log.error('xmltv grabbing failed and returned exit code %d.', ec >> 8)
@@ -134,32 +134,45 @@ if len(sys.argv) > 1:
                               'updating your xmltv: http://www.xmltv.org/')
 
             else:
-                log.info('not configured to run xmltv_grabber')
+                log.info('not configured to run XMLTV grabber')
 
-            if not os.path.isfile(epg.config.xmltv_file):
-                log.error('problem with xmltv_file, not updating EPG')
+            if not os.path.isfile(epg.config.xmltv.data_file):
+                log.error('problem with xmltv.data_file, not updating EPG')
            
             else:
-                log.debug('xmltv_file: %s', epg.config.xmltv_file)
+                log.debug('xmltv_file: %s', epg.config.xmltv.data_file)
                 log.info('loading data into EPG...')
-                guide.update("xmltv", str(epg.config.xmltv_file))
+                guide.update("xmltv", str(epg.config.xmltv.data_file))
 
         else:
             log.info('not configured to use xmltv')
 
 
-        if epg.config.use_zap2it == 1:
-            guide.update("zap2it", username=str(epg.config.zap2it_username), 
-                                   passwd=str(epg.config.zap2it_password))
+        if epg.config.zap2it.activate == 1:
+            guide.update("zap2it", username=str(epg.config.zap2it.username), 
+                                   passwd=str(epg.config.zap2it.password))
 
         else:
             log.info('not configured to use Zap2it')
 
  
-        log.info('connecting to tvserver')
-        mbus = freevo.ipc.Instance()
-        mbus.signals['new-entity'].connect(new_entity)
-        kaa.notifier.OneShotTimer(updated, False).start(2)
+        if epg.config.vdr.activate == 1:
+            log.info('configured to use VDR')
+            guide.update("vdr", vdr_dir=str(epg.config.vdr.dir), 
+                         channels_file=str(epg.config.vdr.channels_file), 
+                         epg_file=str(epg.config.vdr.epg_file),
+                         host=str(epg.config.vdr.host), port=int(epg.config.vdr.port), 
+                         access_by=str(epg.config.vdr.access_by), 
+                         limit_channels=str(epg.config.vdr.limit_channels))
+
+        else:
+            log.info('not configured to use VDR')
+
+
+        #log.info('connecting to tvserver')
+        #mbus = freevo.ipc.Instance()
+        #mbus.signals['new-entity'].connect(new_entity)
+        #kaa.notifier.OneShotTimer(updated, False).start(2)
 
         kaa.main()
 
@@ -185,9 +198,9 @@ if len(sys.argv) > 1:
         
         for program in programs:
             start_time = time.strftime("%a %H:%M", time.localtime(program.start))
-            print "  %s (%s): %s" % (program.channel.short_name, start_time, program.title.encode('latin-1'))
-            if program.desc:
-                print "\t* " + "\n\t  ".join(textwrap.wrap(program.desc.encode('latin-1'), 60))
+            print "  %s (%s): %s" % (program.channel.name.encode('latin-1'), start_time, program.title.encode('latin-1'))
+            if program.description:
+                print "\t* " + "\n\t  ".join(textwrap.wrap(program.description.encode('latin-1'), 60))
 
         print "- Queried %d programs; %s results; %.04f seconds" % \
               (guide.get_num_programs(), len(programs), t1-t0)
@@ -211,10 +224,10 @@ if len(sys.argv) > 1:
         if 1:
             #print dir(guide)
             cs = guide.get_channels()
-            cs.sort(lambda a, b: cmp(a.short_name, b.short_name))
+            cs.sort(lambda a, b: cmp(a.name, b.name))
             cs.sort(lambda a, b: cmp(a.tuner_id, b.tuner_id))
             for c in cs:
-                log.info('tuner_id: "%s" short_name: "%s" long_name: "%s"', c.tuner_id, c.short_name, c.long_name)
+                log.info('tuner_id: "%s" name: "%s" long_name: "%s"', c.tuner_id, c.name, c.long_name)
 
         if 0:
             programs = guide.search(keywords = keywords)

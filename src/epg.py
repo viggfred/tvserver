@@ -35,8 +35,10 @@ import time
 import logging
 
 # kaa imports
-import kaa.epg
 from kaa.notifier import OneShotTimer, Timer, Signal, execute_in_timer
+
+# freevo imports
+from freevo.ipc.epg import connect as guide
 
 # record imports
 from record_types import *
@@ -56,7 +58,7 @@ class EPG(object):
         """
         Return list of channels.
         """
-        return kaa.epg.channels
+        return guide().get_channels()
 
 
     def check_all(self, favorites, recordings, callback, *args, **kwargs):
@@ -101,13 +103,22 @@ class EPG(object):
         # same time, maybe it has moved +- 20 minutes. If the program
         # moved a larger time interval, it won't be found again.
         interval = (rec.start - 20 * 60, rec.start + 20 * 60)
-        results = kaa.epg.search(rec.name, rec.channel, exact_match=True,
-                                 interval = interval)
+
+        # results = kaa.epg.search(rec.name, rec.channel, exact_match=True,
+        #                          interval = interval)
+        # NOTE: How can we do the same as exact_match=True above? Do we need to?
+        #       So far the code below works fine.
+
+        log.debug('search: keywords="%s" channel="%s" time="%s"', rec.name, rec.channel, interval)
+        results = guide().search(keywords = rec.name, 
+                                 channel=guide().get_channel(rec.channel), 
+                                 time = interval)
 
         for epginfo in results:
             # check all results
             if epginfo.start == rec.start and epginfo.stop == rec.stop:
                 # found the recording
+                log.debug('found recording: %s', rec.name)
                 break
         else:
             # try to find it
@@ -124,11 +135,9 @@ class EPG(object):
                 log.info('unable to find recording in epg:\n%s' % rec)
                 return True
 
-        # check if attributes changed (Note: String() should not be
-        # needed here, everything has to be unicode, at least when
-        # kaa.epg2 is done)
+        # check if attributes changed 
         for attr in ('description', 'episode', 'subtitle'):
-            if String(getattr(rec, attr)) != String(getattr(epginfo, attr)):
+            if getattr(rec, attr) != getattr(epginfo, attr):
                 log.info('%s changed for %s', attr, rec.name)
                 setattr(rec, attr, getattr(epginfo, attr))
         return True
@@ -161,8 +170,9 @@ class EPG(object):
         fav = favorites.pop(0)
 
         # Now search the db
-        for p in kaa.epg.search(fav.name, exact_match=not fav.substring):
-            if not fav.match(p.title, p.channel.id, p.start):
+        # NOTE: do we need something like "exact_match=not fav.substring" here?
+        for p in guide().search(keywords=fav.name):
+            if not fav.match(p.title, p.channel.name, p.start):
                 continue
 
             rec = Recording(p.title, p.channel.id, fav.priority,

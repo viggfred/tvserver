@@ -46,7 +46,6 @@ if not __site__ in sys.path:
 # kaa imports
 import kaa
 import kaa.notifier
-import kaa.epg
 
 # FIXME: create logger objects in conf
 import freevo.conf
@@ -69,14 +68,6 @@ log.setLevel(logging.INFO)
 #         os.environ['HOME'] = pwd.getpwuid(os.getuid())[5]
 # except Exception, e:
 #     log.warning('unable to set uid: %s' % e)
-
-# load the epg
-epg_filename = config.epg.database
-if epg_filename.find('$(DATADIR)') >= 0:
-    epg_filename = epg_filename.replace('$(DATADIR)', freevo.conf.DATADIR)
-
-kaa.epg.connect('sqlite2', epg_filename)
-kaa.epg.load()
 
 if len(sys.argv) > 1:
     if sys.argv[1] == '-i':

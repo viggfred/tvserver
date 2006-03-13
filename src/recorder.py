@@ -4,6 +4,9 @@
 # -----------------------------------------------------------------------------
 # $Id$
 #
+# TODO: Handle unknown channels by letting user record them even with no EPG
+#       data.
+#
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
 # Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
@@ -41,10 +44,10 @@ import logging
 
 # kaa imports
 from kaa.notifier import OneShotTimer, Signal
-import kaa.epg
 
 # freevo core imports
 import freevo.ipc
+from freevo.ipc.epg import connect as guide
 
 # record imports
 from config import config
@@ -220,8 +223,8 @@ class Recorder(object):
         self.rpc = self.entity.rpc
         self.rpc('home-theatre.device.describe', self.describe_cb).call(device)
         self.rating = 0
-        self.channel2epg = {}
-        self.epg2channel = {}
+        self.known_channels   = {}
+        self.unknown_channels = {}
 
 
     def __str__(self):
@@ -243,6 +246,19 @@ class Recorder(object):
     def normalize_name(self, name):
         return String(name.replace('.', '').replace(' ', '')).upper().strip()
 
+    def add_channel(self, chan_obj, chan_id):
+        if chan_obj.name in self.known_channels:
+            # duplicate, skip it
+            return
+
+        if chan_id in self.unknown_channels:
+            # found a previously unknown channel
+            del(self.unknown_channels[chan_id])
+
+        chan_obj.tuner_id = chan_id
+        self.known_channels[chan_obj.name] = chan_obj
+        self.possible_bouquets[-1].append(chan_obj.name)
+
     def describe_cb(self, result):
         """
         RPC return for device.describe()
@@ -258,31 +274,58 @@ class Recorder(object):
         for bouquet in result[2]:
             self.possible_bouquets.append([])
             for channel in bouquet:
+
+                # step 1, see config for override
                 if channel in config.epg.mapping:
-                    epgid = config.epg.mapping[channel] or channel
-                    if epgid in self.epg2channel:
-                        # duplicate id, skip it
+                    chan = guide().get_channel(config.epg.mapping[channel])
+
+                    if chan:
+                        self.add_channel(chan, channel)
                         continue
-                    self.possible_bouquets[-1].append(epgid)
-                    self.epg2channel[epgid] = channel
-                    self.channel2epg[channel] = epgid
-                else:
-                    error = True
-                    # ok, new channel, try to guess mapping
-                    for c in kaa.epg.channels:
-                        if Unicode(channel) == Unicode(c.access_id):
-                            epgid = c.id
-                            break
                     else:
-                        normchannel = self.normalize_name(channel)
-                        for c in kaa.epg.channels:
-                            if Unicode(normchannel) == \
-                                   Unicode(self.normalize_name(c.name)):
-                                epgid = c.id
-                                break
-                        else:
-                            epgid = ''
-                    config.epg.mapping[channel] = epgid
+                        # channel is there but unconfigured
+                        # a match may be found later
+                        self.unknown_channels[channel] = guide().new_channel(channel)
+
+                # step 2, try tuner_id
+                chan = guide().get_channel_by_tuner_id(channel)
+
+                if not chan:
+                    # step 3, try name
+                    chan = guide().get_channel(channel)
+
+                if chan:
+                    self.add_channel(chan, channel)
+                    continue
+
+                # ok, new channel, try to guess mapping
+                normchannel = self.normalize_name(channel)
+                chan = guide().get_channel(self.normalize_name(channel))
+                if chan:
+                    self.add_channel(chan, channel)
+                    continue
+
+                else:
+                    # if we got this far that means there is nothing to connect
+                    # the channel reported by tvdev to one in the EPG
+
+                    # server may have started with previously unknown channels
+                    # TODO: handle these unknown_channels, which are just
+                    #       channels with no EPG data
+
+                    if channel not in self.unknown_channels:
+                        error = True
+                    chan = ''
+                    config.epg.mapping[channel] = chan
+
+        # TODO: remove this debugging when everything works good
+        log.debug('bouquets: %s', self.possible_bouquets)
+        n = 1
+        for b in self.possible_bouquets:
+            log.debug('bouquet %d', n)
+            for c in b:
+                log.debug('chan: %s', c)
+            n = n+1
 
         if error:
             OneShotTimer(self.sys_exit).start(1)
@@ -378,7 +421,7 @@ class Recorder(object):
             if remote.id == UNKNOWN_ID:
                 # add the recording
                 rec      = remote.recording
-                channel  = self.epg2channel[rec.channel]
+                channel  = self.known_channels[rec.channel].tuner_id
                 filename = self.get_url(rec)
                 rec.url  = filename
                 log.info('%s: schedule %s' % (String(self.name), String(rec.name)))
@@ -443,7 +486,7 @@ class Recorder(object):
         log.info('start live tv')
 
         rpc = self.rpc('home-theatre.vdr.record', self.start_livetv_cb)
-        rpc.call(self.device, self.epg2channel[channel], 0, 2147483647, url, ())
+        rpc.call(self.device, self.known_channels[channel].tuner_id, 0, 2147483647, url, ())
         id = Recorder.next_livetv_id
         Recorder.next_livetv_id = id + 1
         self.livetv[id] = channel, None

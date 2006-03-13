@@ -28,8 +28,6 @@ config = Config(desc=_('TV Server configuration'), schema=[
 
     # epg group
     Group(name='epg', desc=_('epg settings'), schema=[
-    Var(name='database', default='$(DATADIR)/epg.db',
-        desc=_('Filename for the sqlite database file')),
     Dict(name='mapping', type=unicode, schema=Var(type=unicode),
         desc=_('EPG channel mapping'))])
     ])
