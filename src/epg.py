@@ -85,7 +85,7 @@ class EPG(object):
         self.check_recordings_step(recordings, cb)
 
 
-    @execute_in_timer(Timer, 0)
+    @execute_in_timer(Timer, 0.01)
     def check_recordings_step(self, recordings, callback):
         """
         Check one recording
@@ -108,8 +108,7 @@ class EPG(object):
         #                          interval = interval)
         # NOTE: How can we do the same as exact_match=True above? Do we need to?
         #       So far the code below works fine.
-
-        log.debug('search: keywords="%s" channel="%s" time="%s"', rec.name, rec.channel, interval)
+        log.info('search: keywords="%s" channel="%s" time="%s"', rec.name, rec.channel, interval)
         results = guide().search(keywords = rec.name, 
                                  channel=guide().get_channel(rec.channel), 
                                  time = interval)
@@ -155,7 +154,7 @@ class EPG(object):
         self.check_favorites_step(favorites, favorites[:], recordings, cb)
 
 
-    @execute_in_timer(Timer, 0)
+    @execute_in_timer(Timer, 0.01)
     def check_favorites_step(self, all_favorites, favorites, recordings, callback):
         """
         Check one favorite or run the callback when finished
@@ -170,8 +169,15 @@ class EPG(object):
         fav = favorites.pop(0)
 
         # Now search the db
-        # NOTE: do we need something like "exact_match=not fav.substring" here?
-        for p in guide().search(keywords=fav.name):
+        # Note: we can't use keyword searching here because it won't match
+        # some favorite titles when they have short names.
+        if fav.substring:
+            # unable to do that right now
+            listing = guide().search(keywords=fav.name)
+        else:
+            listing = guide().search(title=fav.name)
+
+        for p in listing:
             if not fav.match(p.title, p.channel.name, p.start):
                 continue
 
