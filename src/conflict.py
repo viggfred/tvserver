@@ -71,9 +71,6 @@ from record_types import *
 # get logging object
 log = logging.getLogger('conflict')
 
-# set some extra debug
-log.setLevel(logging.DEBUG)
-
 class Device(object):
     def __init__(self, recorder=None):
         self.recorder     = None

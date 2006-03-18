@@ -58,9 +58,6 @@ from epg import EPG
 # get logging object
 log = logging.getLogger('record')
 
-# set some extra debug
-log.setLevel(logging.DEBUG)
-
 class RecordServer(object):
     """
     Class for the recordserver. It handles the rpc calls and checks the

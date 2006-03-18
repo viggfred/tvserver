@@ -42,9 +42,6 @@ from conflict import Conflict
 # get logging object
 log = logging.getLogger('record')
 
-# set some extra debug
-log.setLevel(logging.DEBUG)
-
 
 class Scheduler(object):
 
