@@ -57,7 +57,7 @@ from freevo.tvserver.config import config
 log = logging.getLogger('record')
 
 # set basic recording debug to info
-log.setLevel(logging.INFO)
+log.setLevel(getattr(logging, config.loglevel))
 
 # # change uid
 # try:

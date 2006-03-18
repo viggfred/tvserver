@@ -12,6 +12,9 @@ import freevo.conf
 log = logging.getLogger()
 
 config = Config(desc=_('TV Server configuration'), schema=[
+    Var(name='loglevel', type=('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'),
+        default='INFO',
+        desc=_('The log level of the server: CRITICAL, ERROR, WARNING, INFO, DEBUG.')),
     Var(name='livetv_url', default='224.224.224.10',
         desc=('streaming url for live tv')),
 
