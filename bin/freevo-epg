@@ -208,13 +208,23 @@ if len(sys.argv) > 1:
         print "- Queried %d programs; %s results; %.04f seconds" % \
               (guide.get_num_programs(), len(programs), t1-t0)
 
+    elif sys.argv[1] == 'channels':
+        guide = epg.connect()
+        channels = guide.get_channels()
+        channels.sort(lambda a, b: cmp(a.name, b.name))
+        print 'Channels:'
+        for c in channels:
+            print '', c.name
+
+        
     elif sys.argv[1] in ['help', '--help', '-h', '-H']:
         print
         print 'usage: %s <options> <args>' % sys.argv[0]
         print 'options:'
-        print '         update - Update EPG with XMLTV or other sources.'
-        print '         search - Search EPG for programs use args for search.'
-        print '         help   - This message.'
+        print '         update   - Update EPG with XMLTV or other sources.'
+        print '         search   - Search EPG for programs use args for search.'
+        print '         channels - List all channels.'
+        print '         help     - This message.'
         print
         print ' With no options it will start an EPG server.'
         print ' Be sure to check /etc/freevo/epg.conf for available config options.'
