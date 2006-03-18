@@ -99,9 +99,12 @@ if len(sys.argv) > 1:
         # once the update is finished.
         guide.signals["updated"].connect(sys.exit)
 
-        if epg.config.xmltv.activate == 1 and \
-           os.path.isdir(os.path.dirname(epg.config.xmltv.data_file.split()[0])):
+        if epg.config.xmltv.activate == 1:
 
+            data_file = str(epg.config.xmltv.data_file)
+            if not data_file:
+                data_file = os.path.join(kaa.TEMP, 'TV.xml')
+                
             if epg.config.xmltv.grabber and \
                os.path.isfile(epg.config.xmltv.grabber.split()[0]):
                 # NOTE: should the grabbing code be put into a seperate module
@@ -125,7 +128,7 @@ if len(sys.argv) > 1:
                     else:
                         log.info('not configured to use tv_sort, skipping')
 
-                    shutil.move(xmltvtmp, epg.config.xmltv.data_file)
+                    shutil.move(xmltvtmp, data_file)
 
                 else:
                     log.error('xmltv grabbing failed and returned exit code %d.', ec >> 8)
@@ -134,15 +137,15 @@ if len(sys.argv) > 1:
                               'updating your xmltv: http://www.xmltv.org/')
 
             else:
-                log.info('not configured to run XMLTV grabber')
+                log.error('not configured to run XMLTV grabber')
 
-            if not os.path.isfile(epg.config.xmltv.data_file):
-                log.error('problem with xmltv.data_file, not updating EPG')
+            if not os.path.isfile(data_file):
+                log.error('problem with data file, not updating EPG')
            
             else:
-                log.debug('xmltv_file: %s', epg.config.xmltv.data_file)
+                log.debug('xmltv_file: %s', data_file)
                 log.info('loading data into EPG...')
-                guide.update("xmltv", str(epg.config.xmltv.data_file))
+                guide.update("xmltv", data_file)
 
         else:
             log.info('not configured to use xmltv')
