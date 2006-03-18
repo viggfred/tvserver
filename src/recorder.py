@@ -224,7 +224,6 @@ class Recorder(object):
         self.rpc('home-theatre.device.describe', self.describe_cb).call(device)
         self.rating = 0
         self.known_channels   = {}
-        self.unknown_channels = {}
 
 
     def __str__(self):
@@ -250,10 +249,6 @@ class Recorder(object):
             # duplicate, skip it
             return
 
-        if chan_id in self.unknown_channels:
-            # found a previously unknown channel
-            del(self.unknown_channels[chan_id])
-
         chan_obj.tuner_id = chan_id
         self.known_channels[chan_obj.name] = chan_obj
         self.possible_bouquets[-1].append(chan_obj.name)
@@ -271,6 +266,7 @@ class Recorder(object):
 
         error = False
         guessing = False
+
         for bouquet in result[2]:
             self.possible_bouquets.append([])
             for channel in bouquet:
@@ -278,14 +274,9 @@ class Recorder(object):
                 # step 1, see config for override
                 if channel in config.epg.mapping:
                     chan = guide().get_channel(config.epg.mapping[channel])
-
                     if chan:
                         self.add_channel(chan, channel)
                         continue
-                    else:
-                        # channel is there but unconfigured
-                        # a match may be found later
-                        self.unknown_channels[channel] = guide().new_channel(channel)
 
                 # step 2, try tuner_id
                 chan = guide().get_channel_by_tuner_id(channel)
@@ -298,31 +289,46 @@ class Recorder(object):
                     self.add_channel(chan, channel)
                     continue
 
+                if channel in config.epg.mapping:
+                    # Stop here. The channel is in the mapping list but not
+                    # detected by the system. Before we do some bad guessing,
+                    # just set the channel to a non epg channel
+                    self.add_channel(guide().new_channel(channel), channel)
+                    continue
+
+                # Now we start the ugly part of guessing
                 guessing = True
+                found = False
                 # maybe the name is a little bit different
                 normchannel = self.normalize_name(channel)
                 for c in guide().get_channels():
                     if self.normalize_name(c.name) == normchannel:
                         self.add_channel(c, channel)
                         config.epg.mapping[channel] = c.name
+                        found = True
                         break
-                else:
-                    # if we got this far that means there is nothing to connect
-                    # the channel reported by tvdev to one in the EPG
+
+                # TODO: also compare all tuner ids we have for a similar
+                # name and also force harder by checking substrings
+
+                if found:
+                    continue
+                
+                # if we got this far that means there is nothing to connect
+                # the channel reported by tvdev to one in the EPG
                     
-                    # server may have started with previously unknown channels
-                    # TODO: handle these unknown_channels, which are just
-                    #       channels with no EPG data
-                    
-                    if channel not in self.unknown_channels:
-                        error = True
+                if not channel in config.epg.mapping:
+                    error = True
                     config.epg.mapping[channel] = ''
+
 
         if guessing:
             config.save()
+
         if error:
             OneShotTimer(self.sys_exit).start(1)
             return
+
         self.rating = result[1]
         self.update()
 
