@@ -237,7 +237,6 @@ class Recorder(object):
 
 
     def sys_exit(self):
-        config.save()
         log.error('Unknown channels detected on device %s.' % self.device)
         log.error('Please check %s' % config.get_filename())
         log.error('Freevo guessed some settings, so maybe a new start will work\n')
@@ -271,6 +270,7 @@ class Recorder(object):
         self.possible_bouquets = []
 
         error = False
+        guessing = False
         for bouquet in result[2]:
             self.possible_bouquets.append([])
             for channel in bouquet:
@@ -298,35 +298,28 @@ class Recorder(object):
                     self.add_channel(chan, channel)
                     continue
 
-                # ok, new channel, try to guess mapping
+                guessing = True
+                # maybe the name is a little bit different
                 normchannel = self.normalize_name(channel)
-                chan = guide().get_channel(self.normalize_name(channel))
-                if chan:
-                    self.add_channel(chan, channel)
-                    continue
-
+                for c in guide().get_channels():
+                    if self.normalize_name(c.name) == normchannel:
+                        self.add_channel(c, channel)
+                        config.epg.mapping[channel] = c.name
+                        break
                 else:
                     # if we got this far that means there is nothing to connect
                     # the channel reported by tvdev to one in the EPG
-
+                    
                     # server may have started with previously unknown channels
                     # TODO: handle these unknown_channels, which are just
                     #       channels with no EPG data
-
+                    
                     if channel not in self.unknown_channels:
                         error = True
-                    chan = ''
-                    config.epg.mapping[channel] = chan
+                    config.epg.mapping[channel] = ''
 
-        # TODO: remove this debugging when everything works good
-        log.debug('bouquets: %s', self.possible_bouquets)
-        n = 1
-        for b in self.possible_bouquets:
-            log.debug('bouquet %d', n)
-            for c in b:
-                log.debug('chan: %s', c)
-            n = n+1
-
+        if guessing:
+            config.save()
         if error:
             OneShotTimer(self.sys_exit).start(1)
             return
