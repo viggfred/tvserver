@@ -39,6 +39,7 @@ from kaa.notifier import OneShotTimer, Timer, Signal, execute_in_timer
 
 # freevo imports
 from freevo.ipc.epg import connect as guide
+from freevo.ipc.epg import QExpr
 
 # record imports
 from record_types import *
@@ -104,12 +105,8 @@ class EPG(object):
         # moved a larger time interval, it won't be found again.
         interval = (rec.start - 20 * 60, rec.start + 20 * 60)
 
-        # results = kaa.epg.search(rec.name, rec.channel, exact_match=True,
-        #                          interval = interval)
-        # NOTE: How can we do the same as exact_match=True above? Do we need to?
-        #       So far the code below works fine.
-        log.info('search: keywords="%s" channel="%s" time="%s"', rec.name, rec.channel, interval)
-        results = guide().search(keywords = rec.name, 
+        # try to find the exact title again
+        results = guide().search(title = rec.name,
                                  channel=guide().get_channel(rec.channel), 
                                  time = interval)
 
@@ -175,7 +172,7 @@ class EPG(object):
             # unable to do that right now
             listing = guide().search(keywords=fav.name)
         else:
-            listing = guide().search(title=fav.name)
+            listing = guide().search(title=QExpr('like', fav.name))
 
         for p in listing:
             if not fav.match(p.title, p.channel.name, p.start):
