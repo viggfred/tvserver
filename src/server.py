@@ -69,16 +69,6 @@ class RecordServer(object):
     LIVE_TV_ID = 0
 
     def __init__(self):
-        mbus = freevo.ipc.Instance('tvserver')
-
-        # connect exposed functions
-        mbus.connect(self)
-
-        # set status information
-        mbus.connect('freevo.ipc.status')
-        self.status = mbus.status
-        self.send_event = mbus.send_event
-
         self.scheduler = Scheduler(self.scheduler_callback)
         self.epg = EPG()
 
@@ -109,9 +99,21 @@ class RecordServer(object):
         # add schedule timer for SCHEDULE_TIMER / 3 seconds
         Timer(self.schedule).start(SCHEDULE_TIMER / 3)
 
+        Timer(self.update_status).start(60)
+
+        # create mbus instance
+        mbus = freevo.ipc.Instance('tvserver')
+
+        # connect exposed functions
+        mbus.connect(self)
+
+        # set status information
+        mbus.connect('freevo.ipc.status')
+        self.status = mbus.status
+        self.send_event = mbus.send_event
+
         # update status and start timer
         self.update_status()
-        Timer(self.update_status).start(60)
 
 
     @execute_in_timer(OneShotTimer, 0.1, type='once')
@@ -121,10 +123,9 @@ class RecordServer(object):
         """
         if self.locked:
             # system busy, call again later
-            print_schedule()
+            self.print_schedule()
             return True
         
-        log.info('%s %s',id(self.recordings), len(self.recordings))
         if hasattr(self, 'only_print_current'):
             # print only latest recordings
             all = False
@@ -229,7 +230,6 @@ class RecordServer(object):
             # system busy, call again later
             OneShotTimer(self.epg_update).start(0.1)
             return True
-        log.info('%s %s',id(self.recordings), len(self.recordings))
         self.locked = True
         self.epg.check_all(self.favorites, self.recordings, self.epg_update_callback)
 
