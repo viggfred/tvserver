@@ -106,12 +106,31 @@ import freevo.ipc
 # get logging object
 log = logging.getLogger('record')
     
-if len(sys.argv) > 1 and sys.argv[1] == '-i':
-    # import interactive mode
-    from freevo.tvserver import interactive
+if len(sys.argv) > 1:
 
-    kaa.main()
-    sys.exit(0)
+    if sys.argv[1] == '-i':
+        # import interactive mode
+        from freevo.tvserver import interactive
+
+        kaa.main()
+        sys.exit(0)
+
+    if sys.argv[1] == 'update-epg':
+        # epg update
+        from freevo.tvserver import epg
+
+        # connect to tvserver
+        mbus = freevo.ipc.Instance('epg-update')
+        mbus.connect('freevo.ipc.tvserver')
+
+        # connect epg update
+        mbus.tvserver.epg.signals['connected'].connect(epg.update)
+
+        kaa.main()
+        sys.exit(0)
+
+    sys.exit(1)
+
 
 # get logging object
 log = logging.getLogger('record')

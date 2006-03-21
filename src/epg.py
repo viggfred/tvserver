@@ -31,6 +31,7 @@
 # -----------------------------------------------------------------------------
 
 # python imports
+import sys
 import time
 import logging
 
@@ -43,6 +44,7 @@ import kaa.epg
 # record imports
 from record_types import *
 from recording import Recording
+from config import config
 
 # get logging object
 log = logging.getLogger('record')
@@ -204,3 +206,58 @@ class EPG(object):
 
         # done with this one favorite
         return True
+
+
+
+def update():
+    """
+    Update epg data.
+    """
+    def update_progress(cur, total):
+        n = 0
+        if total > 0:
+            n = int((cur / float(total)) * 50)
+        sys.stdout.write("|%51s| %d / %d\r" % (("="*n + ">").ljust(51), cur, total))
+        sys.stdout.flush()
+        if cur == total:
+            print
+
+    guide = kaa.epg.guide
+
+    guide.signals["update_progress"].connect(update_progress)
+    guide.signals["updated"].connect(sys.exit)
+
+    if config.epg.xmltv.activate == 1:
+
+        if not config.epg.xmltv.data_file:
+            log.error('XMLTV gabber not supported yet. Please download the')
+            log.error('file manually and set epg.xmltv.data_file')
+        else:
+
+            data_file = str(config.epg.xmltv.data_file)
+            log.info('loading data into EPG...')
+            guide.update("xmltv", data_file)
+            
+    else:
+        print 'not configured to use xmltv'
+
+
+    if config.epg.zap2it.activate == 1:
+        guide.update("zap2it", username=str(config.epg.zap2it.username), 
+                               passwd=str(config.epg.zap2it.password))
+
+    else:
+        print 'not configured to use Zap2it'
+
+
+    if config.epg.vdr.activate == 1:
+        print 'update epg based on vdr data'
+        guide.update("vdr", vdr_dir=str(config.epg.vdr.dir), 
+                     channels_file=str(config.epg.vdr.channels_file), 
+                     epg_file=str(config.epg.vdr.epg_file),
+                     host=str(config.epg.vdr.host), port=int(config.epg.vdr.port), 
+                     access_by=str(config.epg.vdr.access_by), 
+                     limit_channels=str(config.epg.vdr.limit_channels))
+
+    else:
+        print 'not configured to use VDR'
