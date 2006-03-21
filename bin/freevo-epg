@@ -49,12 +49,9 @@ if not __site__ in sys.path:
 # kaa imports
 import kaa
 import kaa.notifier
-from kaa.epg2 import GuideServer
 
-# FIXME: create logger objects in conf
 import freevo.conf
 import freevo.ipc
-import freevo.ipc.epg as epg
 
 # get logging object
 log = logging.getLogger('epg')
@@ -65,202 +62,173 @@ log.setLevel(logging.DEBUG)
 TVSERVER = {'type': 'home-theatre', 'module': 'tvserver'}
 
 
-def update_progress(cur, total):
-    n = 0
-    if total > 0:
-        n = int((cur / float(total)) * 50)
-    sys.stdout.write("|%51s| %d / %d\r" % (("="*n + ">").ljust(51), cur, total))
-    sys.stdout.flush()
-    if cur == total:
-        print
+def update_guide():
+    """
+    Update epg data.
+    """
+    
+    def update_progress(cur, total):
+        n = 0
+        if total > 0:
+            n = int((cur / float(total)) * 50)
+        sys.stdout.write("|%51s| %d / %d\r" % (("="*n + ">").ljust(51), cur, total))
+        sys.stdout.flush()
+        if cur == total:
+            print
 
+    import freevo.ipc.epg as epg
+    
+    guide = kaa.epg.guide
 
-def updated(result):
-    if result:
-        log.info('updated favorites')
+    # FIXME: This needs a huge cleanup. The grabbing will block the main
+    # loop, that is a very bad idea. And we also have the problem that update
+    # does not work for some reason
+    #
+    # The whole update stuff has to move into the tvserver. The tvserver
+    # should have the epg config and only the tvserver. The rest can get it
+    # by asking the server.
+    
+    guide.signals["update_progress"].connect(update_progress)
+    guide.signals["updated"].connect(sys.exit)
+
+    if epg.config.xmltv.activate == 1:
+
+        data_file = str(epg.config.xmltv.data_file)
+        if not data_file:
+            data_file = os.path.join(kaa.TEMP, 'TV.xml')
+
+        if epg.config.xmltv.grabber and \
+           os.path.isfile(epg.config.xmltv.grabber.split()[0]):
+            # NOTE: should the grabbing code be put into a seperate module
+            #       so other programs can cal it?
+
+            log.info('grabbing listings using %s', epg.config.xmltv.grabber)
+            xmltvtmp = '/tmp/TV.xml.tmp'
+            ec = os.system('%s --output %s --days %s' % (epg.config.xmltv.grabber,
+                                                         xmltvtmp,
+                                                         epg.config.xmltv.days))
+
+            if os.path.exists(xmltvtmp) and ec == 0:
+                if os.path.isfile(epg.config.xmltv.sort):
+                    log.info('sorting listings')
+                    os.system('%s --output %s %s' % (epg.config.xmltv.sort,
+                                                     xmltvtmp+'.1',
+                                                     xmltvtmp))
+
+                    shutil.move(xmltvtmp+'.1', xmltvtmp)
+
+                else:
+                    log.info('not configured to use tv_sort, skipping')
+
+                shutil.move(xmltvtmp, data_file)
+
+            else:
+                log.error('xmltv grabbing failed and returned exit code %d.', ec >> 8)
+                log.error('if you did not change your system, it is likely '+
+                          'that the site being grabbed did.  You might want to try '+
+                          'updating your xmltv: http://www.xmltv.org/')
+
+        else:
+            log.error('not configured to run XMLTV grabber')
+
+        if not os.path.isfile(data_file):
+            log.error('problem with data file, not updating EPG')
+
+        else:
+            log.debug('xmltv_file: %s', data_file)
+            log.info('loading data into EPG...')
+            guide.update("xmltv", data_file)
+
     else:
-        log.info('unable to update favorites')
+        log.info('not configured to use xmltv')
+
+
+    if epg.config.zap2it.activate == 1:
+        guide.update("zap2it", username=str(epg.config.zap2it.username), 
+                               passwd=str(epg.config.zap2it.password))
+
+    else:
+        log.info('not configured to use Zap2it')
+
+
+    if epg.config.vdr.activate == 1:
+        log.info('configured to use VDR')
+        guide.update("vdr", vdr_dir=str(epg.config.vdr.dir), 
+                     channels_file=str(epg.config.vdr.channels_file), 
+                     epg_file=str(epg.config.vdr.epg_file),
+                     host=str(epg.config.vdr.host), port=int(epg.config.vdr.port), 
+                     access_by=str(epg.config.vdr.access_by), 
+                     limit_channels=str(epg.config.vdr.limit_channels))
+
+    else:
+        log.info('not configured to use VDR')
+
+
+def search():
+
+    guide = kaa.epg.guide
+
+    t0 = time.time()
+    if len(sys.argv) > 2:
+        keywords = " ".join(sys.argv[2:])
+        print "Results for '%s':" % keywords
+        programs = guide.search(keywords = keywords)
+        # Sort by start time
+        programs.sort(lambda a, b: cmp(a.start, b.start))
+    else:
+        print "All programs currently playing:"
+        programs = guide.search(time = (time.time(), time.time()+7200))
+        # Sort by channel
+        programs.sort(lambda a, b: cmp(a.channel.tuner_id, b.channel.tuner_id))
+    t1 = time.time()
+
+    for program in programs:
+        start_time = time.strftime("%a %H:%M", time.localtime(program.start))
+        print "  %s (%s): %s" % (program.channel.name.encode('latin-1'), start_time, program.title.encode('latin-1'))
+        if program.description:
+            print "\t* " + "\n\t  ".join(textwrap.wrap(program.description.encode('latin-1'), 60))
+
+    print "- Queried %d programs; %s results; %.04f seconds" % \
+          (guide.get_num_programs(), len(programs), t1-t0)
     sys.exit(0)
 
 
-def new_entity(entity):
-    if not entity.matches(TVSERVER):
-        return True
-    entity.rpc('home-theatre.favorite.update', updated).call()
+def list_channels():
+    channels = kaa.epg.get_channels()
+    channels.sort(lambda a, b: cmp(a.name, b.name))
+    print 'Channels:'
+    for c in channels:
+        print '', c.name
+    sys.exit(0)
 
 
-if len(sys.argv) > 1:
-    if sys.argv[1] == 'update':
-        guide = epg.connect()
-        guide.signals["update_progress"].connect(update_progress)
+if len(sys.argv) <= 1 or sys.argv[1] not in ['update', 'search', 'channels']:
+    print
+    print 'usage: %s <options> <args>' % sys.argv[0]
+    print 'options:'
+    print '         update   - Update EPG with XMLTV or other sources.'
+    print '         search   - Search EPG for programs use args for search.'
+    print '         channels - List all channels.'
+    print '         help     - This message.'
+    print
+    print ' With no options it will start an EPG server.'
+    print ' Be sure to check /etc/freevo/epg.conf for available config options.'
+    print
+    sys.exit(0)
 
-        # if guide.get_num_programs() == 0:
-        # update() is asynchronous so we enter kaa.main() and exit it
-        # once the update is finished.
-        guide.signals["updated"].connect(sys.exit)
+    
+# connect to tvserver
+mbus = freevo.ipc.Instance('freevo')
+mbus.connect('freevo.ipc.tvserver')
 
-        if epg.config.xmltv.activate == 1:
+if sys.argv[1] == 'update':
+    mbus.tvserver.epg.signals['connected'].connect(update_guide)
 
-            data_file = str(epg.config.xmltv.data_file)
-            if not data_file:
-                data_file = os.path.join(kaa.TEMP, 'TV.xml')
-                
-            if epg.config.xmltv.grabber and \
-               os.path.isfile(epg.config.xmltv.grabber.split()[0]):
-                # NOTE: should the grabbing code be put into a seperate module
-                #       so other programs can cal it?
+elif sys.argv[1] == 'search':
+    mbus.tvserver.epg.signals['connected'].connect(search)
 
-                log.info('grabbing listings using %s', epg.config.xmltv.grabber)
-                xmltvtmp = '/tmp/TV.xml.tmp'
-                ec = os.system('%s --output %s --days %s' % (epg.config.xmltv.grabber,
-                                                             xmltvtmp,
-                                                             epg.config.xmltv.days))
+elif sys.argv[1] == 'channels':
+    mbus.tvserver.epg.signals['connected'].connect(list_channels)
 
-                if os.path.exists(xmltvtmp) and ec == 0:
-                    if os.path.isfile(epg.config.xmltv.sort):
-                        log.info('sorting listings')
-                        os.system('%s --output %s %s' % (epg.config.xmltv.sort,
-                                                         xmltvtmp+'.1',
-                                                         xmltvtmp))
-
-                        shutil.move(xmltvtmp+'.1', xmltvtmp)
-
-                    else:
-                        log.info('not configured to use tv_sort, skipping')
-
-                    shutil.move(xmltvtmp, data_file)
-
-                else:
-                    log.error('xmltv grabbing failed and returned exit code %d.', ec >> 8)
-                    log.error('if you did not change your system, it is likely '+
-                              'that the site being grabbed did.  You might want to try '+
-                              'updating your xmltv: http://www.xmltv.org/')
-
-            else:
-                log.error('not configured to run XMLTV grabber')
-
-            if not os.path.isfile(data_file):
-                log.error('problem with data file, not updating EPG')
-           
-            else:
-                log.debug('xmltv_file: %s', data_file)
-                log.info('loading data into EPG...')
-                guide.update("xmltv", data_file)
-
-        else:
-            log.info('not configured to use xmltv')
-
-
-        if epg.config.zap2it.activate == 1:
-            guide.update("zap2it", username=str(epg.config.zap2it.username), 
-                                   passwd=str(epg.config.zap2it.password))
-
-        else:
-            log.info('not configured to use Zap2it')
-
- 
-        if epg.config.vdr.activate == 1:
-            log.info('configured to use VDR')
-            guide.update("vdr", vdr_dir=str(epg.config.vdr.dir), 
-                         channels_file=str(epg.config.vdr.channels_file), 
-                         epg_file=str(epg.config.vdr.epg_file),
-                         host=str(epg.config.vdr.host), port=int(epg.config.vdr.port), 
-                         access_by=str(epg.config.vdr.access_by), 
-                         limit_channels=str(epg.config.vdr.limit_channels))
-
-        else:
-            log.info('not configured to use VDR')
-
-
-        #log.info('connecting to tvserver')
-        #mbus = freevo.ipc.Instance()
-        #mbus.signals['new-entity'].connect(new_entity)
-        #kaa.notifier.OneShotTimer(updated, False).start(2)
-
-        kaa.main()
-
-        log.info('done')
-        sys.exit(0)
-
-    elif sys.argv[1] == 'search':
-        guide = epg.connect()
-
-        t0 = time.time()
-        if len(sys.argv) > 2:
-            keywords = " ".join(sys.argv[2:])
-            print "Results for '%s':" % keywords
-            programs = guide.search(keywords = keywords)
-            # Sort by start time
-            programs.sort(lambda a, b: cmp(a.start, b.start))
-        else:
-            print "All programs currently playing:"
-            programs = guide.search(time = (time.time(), time.time()+7200))
-            # Sort by channel
-            programs.sort(lambda a, b: cmp(a.channel.tuner_id, b.channel.tuner_id))
-        t1 = time.time()
-        
-        for program in programs:
-            start_time = time.strftime("%a %H:%M", time.localtime(program.start))
-            print "  %s (%s): %s" % (program.channel.name.encode('latin-1'), start_time, program.title.encode('latin-1'))
-            if program.description:
-                print "\t* " + "\n\t  ".join(textwrap.wrap(program.description.encode('latin-1'), 60))
-
-        print "- Queried %d programs; %s results; %.04f seconds" % \
-              (guide.get_num_programs(), len(programs), t1-t0)
-
-    elif sys.argv[1] == 'channels':
-        guide = epg.connect()
-        channels = guide.get_channels()
-        channels.sort(lambda a, b: cmp(a.name, b.name))
-        print 'Channels:'
-        for c in channels:
-            print '', c.name
-
-        
-    elif sys.argv[1] in ['help', '--help', '-h', '-H']:
-        print
-        print 'usage: %s <options> <args>' % sys.argv[0]
-        print 'options:'
-        print '         update   - Update EPG with XMLTV or other sources.'
-        print '         search   - Search EPG for programs use args for search.'
-        print '         channels - List all channels.'
-        print '         help     - This message.'
-        print
-        print ' With no options it will start an EPG server.'
-        print ' Be sure to check /etc/freevo/epg.conf for available config options.'
-        print
-
-    elif sys.argv[1] == 'test':
-        # developers can put testing code here
-        guide = epg.connect()
-
-        if 1:
-            #print dir(guide)
-            cs = guide.get_channels()
-            cs.sort(lambda a, b: cmp(a.name, b.name))
-            cs.sort(lambda a, b: cmp(a.tuner_id, b.tuner_id))
-            for c in cs:
-                log.info('tuner_id: "%s" name: "%s" long_name: "%s"', c.tuner_id, c.name, c.long_name)
-
-        if 0:
-            programs = guide.search(keywords = keywords)
-            # Sort by start time
-            programs.sort(lambda a, b: cmp(a.start, b.start))
-
-        if 0:
-            programs = guide.search(time = (time.time(), time.time()+7200))
-            # Sort by channel
-            programs.sort(lambda a, b: cmp(a.channel.tuner_id, b.channel.tuner_id))
-
-    else:
-        sys.exit(1)
-
-else:
-    # start an EPG server that does NOT autoshutdown
-    log.info('starting local EPG server')
-    guide = GuideServer("epg", dbfile=epg.config.database, address=epg.config.address,
-                        log_file='%s/epg-%s.log' % (freevo.conf.DATADIR, os.getuid()),
-                        log_level=logging.DEBUG)
-    kaa.main()
-
-
+kaa.main()
+sys.exit(0)
