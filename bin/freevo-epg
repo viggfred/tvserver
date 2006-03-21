@@ -102,11 +102,10 @@ def list_channels():
     sys.exit(0)
 
 
-if len(sys.argv) <= 1 or sys.argv[1] not in ['update', 'search', 'channels']:
+if len(sys.argv) <= 1 or sys.argv[1] not in ['search', 'channels']:
     print
     print 'usage: %s <options> <args>' % sys.argv[0]
     print 'options:'
-    print '         update   - Update EPG with XMLTV or other sources.'
     print '         search   - Search EPG for programs use args for search.'
     print '         channels - List all channels.'
     print '         help     - This message.'
@@ -120,9 +119,6 @@ if len(sys.argv) <= 1 or sys.argv[1] not in ['update', 'search', 'channels']:
 # connect to tvserver
 mbus = freevo.ipc.Instance('freevo')
 mbus.connect('freevo.ipc.tvserver')
-
-if sys.argv[1] == 'update':
-    mbus.tvserver.epg.signals['connected'].connect(update_guide)
 
 elif sys.argv[1] == 'search':
     mbus.tvserver.epg.signals['connected'].connect(search)
