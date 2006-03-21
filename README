@@ -17,7 +17,7 @@ the epg, later versions of the tvserver should include that.
 You need to have tvdev running with a correct mbus setup. Please read
 the README file of the tvdev application. You also need to have XMLTV
 configured and a valid database. The default location for the database
-is /var/lib/freevo/epg.db and currect SVN requires pysqlite2 as
+is /var/lib/freevo/epg.sqlite and currect SVN requires pysqlite2 as
 backend. If you have an older database please rebuild it.
 
 
@@ -28,6 +28,10 @@ and stop again because record.dir is not defined. Please define it in
 the config file and check the file for other possible changes. The
 system wide config file is /etc/freevo/tvserver.conf and if not
 running as root, a user config file is ~/.freevo/tvserver.conf.
+
+Also set the grabbers for the epg you want to use, e.g. xmltv in that
+file. When you restart the tvserver, you can start tvserver again
+(while the first one is running) with the paramater update-epg.
 
 Now start tvserver again and it should find the running tvdev (there
 should be a debug line showing the ip address and the devices, like
