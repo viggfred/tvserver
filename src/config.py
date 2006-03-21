@@ -31,8 +31,10 @@ config = Config(desc=_('TV Server configuration'), schema=[
 
     # epg group
     Group(name='epg', desc=_('epg settings'), schema=[
+    Var(name='database', default=freevo.conf.datafile('epg.sqlite'),
+        desc=_('epg database file')),
     Dict(name='mapping', type=unicode, schema=Var(type=unicode),
-        desc=_('EPG channel mapping'))])
+         desc=_('EPG channel mapping'))])
     ])
 
 config.load('/etc/freevo/tvserver.conf')

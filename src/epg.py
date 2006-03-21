@@ -38,8 +38,7 @@ import logging
 from kaa.notifier import OneShotTimer, Timer, Signal, execute_in_timer
 
 # freevo imports
-from freevo.ipc.epg import connect as guide
-from freevo.ipc.epg import QExpr
+import kaa.epg
 
 # record imports
 from record_types import *
@@ -59,7 +58,7 @@ class EPG(object):
         """
         Return list of channels.
         """
-        return guide().get_channels()
+        return kaa.epg.get_channels()
 
 
     def check_all(self, favorites, recordings, callback, *args, **kwargs):
@@ -105,10 +104,13 @@ class EPG(object):
         # moved a larger time interval, it won't be found again.
         interval = (rec.start - 20 * 60, rec.start + 20 * 60)
 
+        channel = kaa.epg.get_channel(rec.channel)
+        if not channel:
+            log.error('unable to find %s in epg database', rec.channel)
+            return True
+            
         # try to find the exact title again
-        results = guide().search(title = rec.name,
-                                 channel=guide().get_channel(rec.channel), 
-                                 time = interval)
+        results = kaa.epg.search(title = rec.name, channel=channel, time = interval)
 
         for epginfo in results:
             # check all results
@@ -170,9 +172,9 @@ class EPG(object):
         # some favorite titles when they have short names.
         if fav.substring:
             # unable to do that right now
-            listing = guide().search(keywords=fav.name)
+            listing = kaa.epg.search(keywords=fav.name)
         else:
-            listing = guide().search(title=QExpr('like', fav.name))
+            listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
 
         for p in listing:
             if not fav.match(p.title, p.channel.name, p.start):

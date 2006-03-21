@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 # $Id$
 #
-# This helper will start the freevo recordserver.
+# This is the freevo tvserver (including epg server)
 #
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
@@ -33,8 +33,8 @@
 
 # python imports
 import os
+import time
 import sys
-import pwd
 import logging
 
 # insert freevo path information
@@ -43,47 +43,118 @@ __site__ = os.path.normpath(os.path.join(os.path.dirname(__file__), __site__))
 if not __site__ in sys.path:
     sys.path.insert(0, __site__)
 
+pid = -1
+if len(sys.argv) == 1:
+    # Normal recordserver startup, fork epg client. We can not import kaa before
+    # forking or the notifier will fail because the internal thread wakeup is
+    # handled by two different processes.
+    pid = os.fork()
+
+if not pid:
+    # This is the epg server. Import everything we need and start it
+    
+    # kaa imports
+    import kaa
+    import kaa.epg
+    
+    # freevo core imports
+    import freevo.conf
+    
+    # read the config file
+    from freevo.tvserver.config import config
+
+    # logger setup
+    log = logging.getLogger()
+    log.setLevel(logging.INFO)
+    
+    # remove handler, we want to set the look and avoid
+    # duplicate handlers
+    for l in log.handlers:
+        log.removeHandler(l)
+
+    handler = logging.FileHandler('%s/tvepg-%s' % (freevo.conf.LOGDIR, os.getuid()))
+    handler.setFormatter(freevo.conf.formatter)
+    log.addHandler(handler)
+
+    # get logging object
+    log = logging.getLogger('record')
+    
+    # set basic recording debug to info
+    log.setLevel(getattr(logging, config.loglevel))
+
+    guide = kaa.epg.Server(str(config.epg.database))
+    
+    # run epg server
+    kaa.main()
+
+    # print debug at the end
+    log.info('terminate epg')
+    sys.exit(0)
+
+
+
+# At this point we are the main tvserver
+
 # kaa imports
 import kaa
-import kaa.notifier
-
-# FIXME: create logger objects in conf
+import kaa.epg
+    
+# freevo core imports
 import freevo.conf
+import freevo.ipc
+    
+# get logging object
+log = logging.getLogger('record')
+    
+if len(sys.argv) > 1 and sys.argv[1] == '-i':
+    # import interactive mode
+    from freevo.tvserver import interactive
 
-# create and read config
-from freevo.tvserver.config import config
+    kaa.main()
+    sys.exit(0)
 
 # get logging object
 log = logging.getLogger('record')
 
+# connect to the epg at client side
+while 1:
+    try:
+        epg = kaa.epg.connect('epg')
+        break
+    except Exception, e:
+        if os.waitpid(pid, os.WNOHANG)[0] == pid:
+            log.error('unable to start epg server')
+            sys.exit(1)
+        time.sleep(0.01)
+
+# import config. At this point we are conncted to the epg. This also means that
+# the epg server already opened the config file and maybe wrote it.
+from freevo.tvserver.config import config
+    
 # set basic recording debug to info
 log.setLevel(getattr(logging, config.loglevel))
 
-# # change uid
-# try:
-#     if config.SERVER_UID and os.getuid() == 0:
-#         os.setgid(config.SERVER_GID)
-#         os.setuid(config.SERVER_UID)
-#         os.environ['USER'] = pwd.getpwuid(os.getuid())[0]
-#         os.environ['HOME'] = pwd.getpwuid(os.getuid())[5]
-# except Exception, e:
-#     log.warning('unable to set uid: %s' % e)
+# import recordserver
+from freevo.tvserver.server import RecordServer
 
-if len(sys.argv) > 1:
-    if sys.argv[1] == '-i':
-        # import interactive mode
-        from freevo.tvserver import interactive
-        
-    else:
-        sys.exit(1)
-else:
-    # import recordserver
-    from freevo.tvserver.server import RecordServer
+# start recordserver
+server = RecordServer()
 
-    # start recordserver
-    server = RecordServer()
+# get mbus address for epg settings
+mbus = freevo.ipc.Instance('tvserver')
+
+auth = mbus.cfg.hashkey.strip()
+host = mbus.addr['id'][mbus.addr['id'].find('@')+1:]
+port = epg._server.connect_to_network(host + ':0', auth)[1]
+
+# make epg information public
+server.epgaddr = (host, port)
 
 kaa.main()
+
+# kill epg server
+# FIXME: make sure the server stops itself when the tvserver is gone
+os.kill(pid, 15)
 
 # print debug at the end
 log.info('terminate')

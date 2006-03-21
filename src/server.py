@@ -72,6 +72,7 @@ class RecordServer(object):
         self.last_listing = []
         self.live_tv_map = {}
         self.locked = False
+        self.epgaddr = ('', 0)
         
         # add port for channels and check if they are in live-tv mode
         port = 6000
@@ -574,6 +575,13 @@ class RecordServer(object):
         for f in self.favorites:
             ret.append(f.long_list())
         return ret
+
+
+    @freevo.ipc.expose('home-theatre.epg.connect')
+    def rpc_epg_connect(self):
+        """
+        """
+        return self.epgaddr
 
 
     #

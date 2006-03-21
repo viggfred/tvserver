@@ -44,10 +44,10 @@ import logging
 
 # kaa imports
 from kaa.notifier import OneShotTimer, Signal
+import kaa.epg
 
 # freevo core imports
 import freevo.ipc
-from freevo.ipc.epg import connect as guide
 
 # record imports
 from config import config
@@ -273,17 +273,17 @@ class Recorder(object):
 
                 # step 1, see config for override
                 if channel in config.epg.mapping:
-                    chan = guide().get_channel(config.epg.mapping[channel])
+                    chan = kaa.epg.guide.get_channel(config.epg.mapping[channel])
                     if chan:
                         self.add_channel(chan, channel)
                         continue
 
                 # step 2, try tuner_id
-                chan = guide().get_channel_by_tuner_id(channel)
+                chan = kaa.epg.guide.get_channel_by_tuner_id(channel)
 
                 if not chan:
                     # step 3, try name
-                    chan = guide().get_channel(channel)
+                    chan = kaa.epg.guide.get_channel(channel)
 
                 if chan:
                     self.add_channel(chan, channel)
@@ -293,7 +293,7 @@ class Recorder(object):
                     # Stop here. The channel is in the mapping list but not
                     # detected by the system. Before we do some bad guessing,
                     # just set the channel to a non epg channel
-                    self.add_channel(guide().new_channel(channel), channel)
+                    self.add_channel(kaa.epg.guide.new_channel(channel), channel)
                     continue
 
                 # Now we start the ugly part of guessing
@@ -301,7 +301,7 @@ class Recorder(object):
                 found = False
                 # maybe the name is a little bit different
                 normchannel = self.normalize_name(channel)
-                for c in guide().get_channels():
+                for c in kaa.epg.guide.get_channels():
                     if self.normalize_name(c.name) == normchannel:
                         self.add_channel(c, channel)
                         config.epg.mapping[channel] = c.name
