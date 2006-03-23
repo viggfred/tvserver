@@ -137,7 +137,9 @@ class EPG(object):
 
         # check if attributes changed 
         for attr in ('description', 'episode', 'subtitle'):
-            if getattr(rec, attr) != getattr(epginfo, attr):
+            newattr = getattr(epginfo, attr)
+            oldattr = getattr(rec, attr)
+            if (newattr or oldattr) and newattr != oldattr:
                 log.info('%s changed for %s', attr, rec.name)
                 setattr(rec, attr, getattr(epginfo, attr))
         return True
