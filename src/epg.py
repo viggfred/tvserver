@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # epg.py - EPG handling for the recordserver
 # -----------------------------------------------------------------------------
-# $Id: server.py 7893 2006-01-29 17:53:54Z dmeyer $
+# $Id$
 #
 #
 # -----------------------------------------------------------------------------
@@ -53,7 +53,11 @@ log = logging.getLogger('record')
 class EPG(object):
 
     def __init__(self):
-        self.signals = { 'changed': Signal() }
+        self.signals = {
+            'changed': Signal(),
+            'updated': Signal()
+            }
+        self.updating = False
 
 
     def channels(self):
@@ -110,7 +114,7 @@ class EPG(object):
         if not channel:
             log.error('unable to find %s in epg database', rec.channel)
             return True
-            
+
         # try to find the exact title again
         results = kaa.epg.search(title = rec.name, channel=channel, time = interval)
 
@@ -135,7 +139,7 @@ class EPG(object):
                 log.info('unable to find recording in epg:\n%s' % rec)
                 return True
 
-        # check if attributes changed 
+        # check if attributes changed
         for attr in ('description', 'episode', 'subtitle'):
             newattr = getattr(epginfo, attr)
             oldattr = getattr(rec, attr)
@@ -210,56 +214,37 @@ class EPG(object):
         return True
 
 
+    def update(self):
+        """
+        Update the epg data in the epg server
+        """
+        if self.updating:
+            return False
 
-def update():
-    """
-    Update epg data.
-    """
-    def update_progress(cur, total):
-        n = 0
-        if total > 0:
-            n = int((cur / float(total)) * 50)
-        sys.stdout.write("|%51s| %d / %d\r" % (("="*n + ">").ljust(51), cur, total))
-        sys.stdout.flush()
-        if cur == total:
-            print
-
-    guide = kaa.epg.guide
-
-    guide.signals["update_progress"].connect(update_progress)
-    guide.signals["updated"].connect(sys.exit)
-
-    if config.epg.xmltv.activate == 1:
-
-        if not config.epg.xmltv.data_file:
-            log.error('XMLTV gabber not supported yet. Please download the')
-            log.error('file manually and set epg.xmltv.data_file')
-        else:
-
-            data_file = str(config.epg.xmltv.data_file)
-            log.info('loading data into EPG...')
-            guide.update("xmltv", data_file)
-            
-    else:
-        print 'not configured to use xmltv'
+        self.updating = True
+        sources = kaa.epg.sources.items()[:]
+        sources.sort(lambda x,y: cmp(x[0], y[0]))
+        kaa.epg.guide.signals["updated"].connect(self.update_step, sources)
+        self.update_step(sources)
+        return True
 
 
-    if config.epg.zap2it.activate == 1:
-        guide.update("zap2it", username=str(config.epg.zap2it.username), 
-                               passwd=str(config.epg.zap2it.password))
+    def update_step(self, sources):
+        """
+        Update the next source in the sources list
+        """
+        if not sources:
+            log.info('epg update complete')
+            kaa.epg.guide.signals["updated"].disconnect(self.update_step)
+            self.updating = True
+            self.signals['updated'].emit()
+            return True
 
-    else:
-        print 'not configured to use Zap2it'
+        name, module = sources.pop(0)
+        if not module.config.activate:
+            log.info('skip epg update on %s', name)
+            return self.update_step(sources)
 
-
-    if config.epg.vdr.activate == 1:
-        print 'update epg based on vdr data'
-        guide.update("vdr", vdr_dir=str(config.epg.vdr.dir), 
-                     channels_file=str(config.epg.vdr.channels_file), 
-                     epg_file=str(config.epg.vdr.epg_file),
-                     host=str(config.epg.vdr.host), port=int(config.epg.vdr.port), 
-                     access_by=str(config.epg.vdr.access_by), 
-                     limit_channels=str(config.epg.vdr.limit_channels))
-
-    else:
-        print 'not configured to use VDR'
+        log.info('start epg update on %s', name)
+        kaa.epg.guide.update(name)
+        return True

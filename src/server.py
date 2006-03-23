@@ -68,7 +68,8 @@ class RecordServer(object):
     def __init__(self):
         self.scheduler = Scheduler(self.scheduler_callback)
         self.epg = EPG()
-
+        self.epg.signals['updated'].connect(self.epg_update)
+        
         self.last_listing = []
         self.live_tv_map = {}
         self.locked = False
@@ -577,11 +578,24 @@ class RecordServer(object):
         return ret
 
 
+    #
+    # home.theatre.epg rpc commands
+    #
+
+
     @freevo.ipc.expose('home-theatre.epg.connect')
     def rpc_epg_connect(self):
         """
         """
         return self.epgaddr
+
+
+    @freevo.ipc.expose('home-theatre.epg.update')
+    def rpc_epg_update(self):
+        """
+        """
+        self.epg.update()
+        return []
 
 
     #
@@ -590,7 +604,7 @@ class RecordServer(object):
 
     def update_status(self):
         """
-        Update status information evenry minute.
+        Update status information every minute.
         """
         ctime = time.time()
 
@@ -604,7 +618,10 @@ class RecordServer(object):
             # something is recording, add busy time of first recording
             busy = rec[0].stop + rec[0].stop_padding - ctime
             self.status.set('busy', max(1, int(busy / 60) + 1))
-
+        elif self.epg.updating:
+            # epg update in progress
+            self.status.set('busy', 1)
+            
         # find next scheduled recordings for wakeup
         # FIXME: what about CONFLICT? we don't need to start the server
         # for a normal conflict, but we may need it when tvdev is not running
