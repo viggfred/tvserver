@@ -99,13 +99,13 @@ class Recording(object):
         self.start_padding = config.record.start_padding
         self.stop_padding  = config.record.stop_padding
         for key, value in info.items():
-            if key in ('subtitle', 'description'):
+            if key in ('subtitle', 'description') and value:
                 setattr(self, key, Unicode(value))
-            elif key == 'url':
+            elif key == 'url' and value:
                 self.url = String(value)
             elif key in ('start-padding', 'stop_padding'):
                 setattr(self, key, int(value))
-            else:
+            elif value:
                 self.info[key] = Unicode(value)
 
         self.recorder = None
