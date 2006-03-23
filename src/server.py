@@ -594,6 +594,7 @@ class RecordServer(object):
     def rpc_epg_update(self):
         """
         """
+        log.info('home-theatre.epg.update')
         self.epg.update()
         return []
 

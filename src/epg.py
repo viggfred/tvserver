@@ -219,6 +219,7 @@ class EPG(object):
         Update the epg data in the epg server
         """
         if self.updating:
+            log.info('epg update in progress')
             return False
 
         self.updating = True
