@@ -43,6 +43,10 @@ __site__ = os.path.normpath(os.path.join(os.path.dirname(__file__), __site__))
 if not __site__ in sys.path:
     sys.path.insert(0, __site__)
 
+# fix possible path problems (it crashes on some python installations)
+if os.path.dirname(__file__) in sys.path:
+    sys.path.remove(os.path.dirname(__file__))
+
 pid = -1
 if len(sys.argv) == 1:
     # Normal recordserver startup, fork epg client. We can not import kaa before
