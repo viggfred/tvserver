@@ -178,7 +178,9 @@ class RecordServer(object):
         self.last_listing = listing
 
         # send update to all clients
-        self.send_event('home-theatre.record.list.update', *sending)
+        if sending:
+            log.info("send update for %s recordings", len(sending))
+            self.send_event('home-theatre.record.list.update', *sending)
 
         # save fxd file
         self.save()
@@ -368,6 +370,7 @@ class RecordServer(object):
         result: [ ( id channel priority start stop status ) (...) ]
         """
         ret = []
+        log.info('send list for %s recordings' % len(self.recordings))
         for r in self.recordings:
             ret.append(r.short_list())
         return ret
@@ -383,7 +386,7 @@ class RecordServer(object):
         for r in self.recordings:
             if r.id == id:
                 return r.long_list()
-        raise IndexError('Recording %s (%s) not found', id, type(id))
+        raise IndexError('Recording %s (%s) not found' % (id, type(id)))
 
 
     @freevo.ipc.expose('home-theatre.recording.add')
@@ -618,7 +621,7 @@ class RecordServer(object):
         if rec:
             # something is recording, add busy time of first recording
             busy = rec[0].stop + rec[0].stop_padding - ctime
-            self.status.set('busy', max(1, int(busy / 60) + 1))
+            self.status.set('busy', max(2, int(busy / 60) + 1))
         elif self.epg.updating:
             # epg update in progress
             self.status.set('busy', 1)
