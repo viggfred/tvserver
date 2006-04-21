@@ -240,7 +240,7 @@ class EPG(object):
         if not sources:
             log.info('epg update complete')
             kaa.epg.guide.signals["updated"].disconnect(self.update_step)
-            self.updating = True
+            self.updating = False
             self.signals['updated'].emit()
             return True
 

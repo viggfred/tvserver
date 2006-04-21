@@ -621,7 +621,7 @@ class RecordServer(object):
         if rec:
             # something is recording, add busy time of first recording
             busy = rec[0].stop + rec[0].stop_padding - ctime
-            self.status.set('busy', max(2, int(busy / 60) + 1))
+            self.status.set('busy', max(1, int(busy / 60) + 1))
         elif self.epg.updating:
             # epg update in progress
             self.status.set('busy', 1)
