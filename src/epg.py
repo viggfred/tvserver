@@ -184,10 +184,13 @@ class EPG(object):
         else:
             listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
 
+        now = time.time()
         for p in listing:
             if not fav.match(p.title, p.channel.name, p.start):
                 continue
-
+            if p.stop < now:
+                # do not add old stuff
+                continue
             rec = Recording(p.title, p.channel.id, fav.priority,
                             p.start, p.stop,
 			    info={ "episode":p.episode,
