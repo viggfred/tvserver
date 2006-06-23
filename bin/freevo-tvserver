@@ -131,6 +131,7 @@ while 1:
         epg = kaa.epg.connect('epg')
         break
     except Exception, e:
+        # log.exception('')
         if os.waitpid(pid, os.WNOHANG)[0] == pid:
             log.error('unable to start epg server')
             sys.exit(1)
@@ -154,7 +155,7 @@ mbus = freevo.ipc.Instance('tvserver')
 
 auth = mbus.cfg.hashkey.strip()
 host = mbus.addr['id'][mbus.addr['id'].find('@')+1:]
-port = epg._server.connect_to_network(host + ':0', auth)[1]
+port = epg.server.rpc('server.start', 'blocking')(host + ':0', auth)[1]
 
 # make epg information public
 server.epgaddr = (host, port)
