@@ -56,21 +56,21 @@ if len(sys.argv) == 1:
 
 if not pid:
     # This is the epg server. Import everything we need and start it
-    
+
     # kaa imports
     import kaa
     import kaa.epg
-    
+
     # freevo core imports
     import freevo.conf
-    
+
     # read the config file
     from freevo.tvserver.config import config
 
     # logger setup
     log = logging.getLogger()
     log.setLevel(logging.INFO)
-    
+
     # remove handler, we want to set the look and avoid
     # duplicate handlers
     for l in log.handlers:
@@ -82,12 +82,12 @@ if not pid:
 
     # get logging object
     log = logging.getLogger('record')
-    
+
     # set basic recording debug to info
     log.setLevel(getattr(logging, config.loglevel))
 
     guide = kaa.epg.Server(str(config.epg.database))
-    
+
     # run epg server
     kaa.main()
 
@@ -102,14 +102,14 @@ if not pid:
 # kaa imports
 import kaa
 import kaa.epg
-    
+
 # freevo core imports
 import freevo.conf
 import freevo.ipc
-    
+
 # get logging object
 log = logging.getLogger('record')
-    
+
 if len(sys.argv) > 1:
 
     if sys.argv[1] == '-i':
@@ -125,40 +125,50 @@ if len(sys.argv) > 1:
 # get logging object
 log = logging.getLogger('record')
 
+def start():
+    """
+    Start tvserver.
+    """
+    # import config. At this point we are conncted to the epg. This also means that
+    # the epg server already opened the config file and maybe wrote it.
+    from freevo.tvserver.config import config
+
+    # set basic recording debug to info
+    log.setLevel(getattr(logging, config.loglevel))
+
+    # import recordserver
+    from freevo.tvserver.server import RecordServer
+
+    # start recordserver
+    server = RecordServer()
+
+    # get mbus address for epg settings
+    mbus = freevo.ipc.Instance('tvserver')
+
+    auth = mbus.cfg.hashkey.strip()
+    host = mbus.addr['id'][mbus.addr['id'].find('@')+1:]
+    port = epg.server.rpc('server.start', 'blocking')(host + ':0', auth)[1]
+
+    # make epg information public
+    server.epgaddr = (host, port)
+
+
 # connect to the epg at client side
-while 1:
+num_trys = 1000
+while num_trys:
+    num_trys -= 1
     try:
         epg = kaa.epg.connect('epg')
+        epg.signals['connected'].connect_once(start)
         break
     except Exception, e:
-        # log.exception('')
+        if not num_trys:
+            log.exception('')
+            sys.exit(1)
         if os.waitpid(pid, os.WNOHANG)[0] == pid:
             log.error('unable to start epg server')
             sys.exit(1)
         time.sleep(0.01)
-
-# import config. At this point we are conncted to the epg. This also means that
-# the epg server already opened the config file and maybe wrote it.
-from freevo.tvserver.config import config
-    
-# set basic recording debug to info
-log.setLevel(getattr(logging, config.loglevel))
-
-# import recordserver
-from freevo.tvserver.server import RecordServer
-
-# start recordserver
-server = RecordServer()
-
-# get mbus address for epg settings
-mbus = freevo.ipc.Instance('tvserver')
-
-auth = mbus.cfg.hashkey.strip()
-host = mbus.addr['id'][mbus.addr['id'].find('@')+1:]
-port = epg.server.rpc('server.start', 'blocking')(host + ':0', auth)[1]
-
-# make epg information public
-server.epgaddr = (host, port)
 
 kaa.main()
 

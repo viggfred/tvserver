@@ -36,7 +36,7 @@ import time
 import logging
 
 # kaa imports
-from kaa.notifier import OneShotTimer, Timer, Signal, execute_in_timer
+from kaa.notifier import OneShotTimer, Timer, Signal, Callback
 
 # freevo imports
 import kaa.epg
@@ -51,6 +51,11 @@ log = logging.getLogger('record')
 
 
 class EPG(object):
+
+
+    # -------------------------------------------------------------------------
+    # Public Interface
+    # -------------------------------------------------------------------------
 
     def __init__(self):
         self.signals = {
@@ -67,39 +72,53 @@ class EPG(object):
         return kaa.epg.get_channels()
 
 
-    def check_all(self, favorites, recordings, callback, *args, **kwargs):
+    def check(self, favorites, recordings, callback, *args, **kwargs):
         """
         Check recordings and favorites against epg.
         """
-        self.check_recordings(recordings, self.check_favorities, favorites,
-                              recordings, callback, *args, **kwargs)
-
-
-    def check_recordings(self, recordings, callback, *args, **kwargs):
-        """
-        Check current recordings against the database
-        """
-        cb = None
         if callback:
-            cb = OneShotTimer(callback, *args, **kwargs)
+            # convert callback to a timer with all args
+            callback = OneShotTimer(callback, *args, **kwargs)
 
-        # get list of recordings to check
+        # create callback for _check_recordings_prepare to call the favorites
+        # checker with the original callback
+        fav = Callback(self._check_favorites_prepare, favorites, favorites[:],
+                       recordings, callback)
+
+        # get list of recordings to check in _check_recordings
         ctime = time.time() + 60 * 15
         recordings = [ r for r in recordings if r.start - r.start_padding > ctime \
                        and r.status in (CONFLICT, SCHEDULED) ]
-        # start check_recordings_step
-        self.check_recordings_step(recordings, cb)
+        self._check_recordings_prepare(recordings, fav)
 
 
-    @execute_in_timer(Timer, 0.01)
-    def check_recordings_step(self, recordings, callback):
+    def update(self):
         """
-        Check one recording
+        Update the epg data in the epg server
+        """
+        if self.updating:
+            log.info('epg update in progress')
+            return False
+
+        self.updating = True
+        sources = kaa.epg.sources.items()[:]
+        sources.sort(lambda x,y: cmp(x[0], y[0]))
+        kaa.epg.guide.signals["updated"].connect(self._update_step, sources)
+        self._update_step(sources)
+        return True
+
+
+    # -------------------------------------------------------------------------
+    # Private Functions
+    # -------------------------------------------------------------------------
+
+    def _check_recordings_prepare(self, recordings, callback):
+        """
+        Check one recording (Part 1)
         """
         if not recordings:
-            # start callback
-            if callback:
-                callback.start(0)
+            # start callback (check favorites)
+            callback()
             return False
 
         # get one recording to check
@@ -113,11 +132,19 @@ class EPG(object):
         channel = kaa.epg.get_channel(rec.channel)
         if not channel:
             log.error('unable to find %s in epg database', rec.channel)
-            return True
+            return self._check_recordings_prepare(recordings, callback)
 
-        # try to find the exact title again
-        results = kaa.epg.search(title = rec.name, channel=channel, time = interval)
+        # Try to find the exact title again. The epg call is async so we
+        # create a callback for part 2 of this function and return.
+        search_callback = Callback(self._check_recordings, rec, recordings, callback)
+        kaa.epg.search(title = rec.name, channel=channel, time = interval,
+                       callback=search_callback)
 
+
+    def _check_recordings(self, results, rec, recordings, callback):
+        """
+        Check one recording (Part 2)
+        """
         for epginfo in results:
             # check all results
             if epginfo.start == rec.start and epginfo.stop == rec.stop:
@@ -137,7 +164,7 @@ class EPG(object):
                     break
             else:
                 log.info('unable to find recording in epg:\n%s' % rec)
-                return True
+                return self._check_recordings_prepare(recordings, callback)
 
         # check if attributes changed
         for attr in ('description', 'episode', 'subtitle'):
@@ -146,25 +173,12 @@ class EPG(object):
             if (newattr or oldattr) and newattr != oldattr:
                 log.info('%s changed for %s', attr, rec.name)
                 setattr(rec, attr, getattr(epginfo, attr))
-        return True
+        return self._check_recordings_prepare(recordings, callback)
 
 
-    def check_favorities(self, favorites, recordings, callback, *args, **kwargs):
+    def _check_favorites_prepare(self, all_favorites, favorites, recordings, callback):
         """
-        Check favorites against the database and add them to the list of
-        recordings. If callback is given, the callback will be called
-        when checking is done.
-        """
-        cb = None
-        if callback:
-            cb = OneShotTimer(callback, *args, **kwargs)
-        self.check_favorites_step(favorites, favorites[:], recordings, cb)
-
-
-    @execute_in_timer(Timer, 0.01)
-    def check_favorites_step(self, all_favorites, favorites, recordings, callback):
-        """
-        Check one favorite or run the callback when finished
+        Check one favorite (Part 1)
         """
         if not favorites:
             # start callback
@@ -175,15 +189,27 @@ class EPG(object):
         # get favorite to check
         fav = favorites.pop(0)
 
-        # Now search the db
+        # Now search the db. The epg call is async so we create a callback for
+        # part 2 of this function and return.
+        #
         # Note: we can't use keyword searching here because it won't match
         # some favorite titles when they have short names.
+
+        search_callback = Callback(self._check_favorities, fav, all_favorites,
+                                   favorites, recordings, callback)
         if fav.substring:
             # unable to do that right now
-            listing = kaa.epg.search(keywords=fav.name)
-        else:
-            listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
+            kaa.epg.search(keywords=fav.name, callback=search_callback)
+            return
+        # 'like' search
+        kaa.epg.search(title=kaa.epg.QExpr('like', fav.name), callback=search_callback)
 
+
+    def _check_favorities(self, listing, fav, all_favorites, favorites, recordings,
+                          callback):
+        """
+        Check one favorite (Part 2)
+        """
         now = time.time()
         for p in listing:
             if not fav.match(p.title, p.channel.name, p.start):
@@ -213,33 +239,18 @@ class EPG(object):
                 all_favorites.remove(fav)
                 break
 
-        # done with this one favorite
+        # done with this one favorite, call prepare again
+        self._check_favorites_prepare(all_favorites, favorites, recordings, callback)
         return True
 
 
-    def update(self):
-        """
-        Update the epg data in the epg server
-        """
-        if self.updating:
-            log.info('epg update in progress')
-            return False
-
-        self.updating = True
-        sources = kaa.epg.sources.items()[:]
-        sources.sort(lambda x,y: cmp(x[0], y[0]))
-        kaa.epg.guide.signals["updated"].connect(self.update_step, sources)
-        self.update_step(sources)
-        return True
-
-
-    def update_step(self, sources):
+    def _update_step(self, sources):
         """
         Update the next source in the sources list
         """
         if not sources:
             log.info('epg update complete')
-            kaa.epg.guide.signals["updated"].disconnect(self.update_step)
+            kaa.epg.guide.signals["updated"].disconnect(self._update_step)
             self.updating = False
             self.signals['updated'].emit()
             return True
@@ -247,7 +258,7 @@ class EPG(object):
         name, module = sources.pop(0)
         if not module.config.activate:
             log.info('skip epg update on %s', name)
-            return self.update_step(sources)
+            return self._update_step(sources)
 
         log.info('start epg update on %s', name)
         kaa.epg.guide.update(name)

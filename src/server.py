@@ -69,12 +69,12 @@ class RecordServer(object):
         self.scheduler = Scheduler(self.scheduler_callback)
         self.epg = EPG()
         self.epg.signals['updated'].connect(self.epg_update)
-        
+
         self.last_listing = []
         self.live_tv_map = {}
         self.locked = False
         self.epgaddr = ('', 0)
-        
+
         # add port for channels and check if they are in live-tv mode
         port = 6000
         for index, channel in enumerate(self.epg.channels()):
@@ -124,7 +124,7 @@ class RecordServer(object):
             # system busy, call again later
             self.print_schedule()
             return True
-        
+
         if hasattr(self, 'only_print_current'):
             # print only latest recordings
             all = False
@@ -200,7 +200,7 @@ class RecordServer(object):
             # system busy, call again later
             OneShotTimer(self.schedule).start(0.1)
             return True
-        
+
         log.info('calling self.schedule')
         # sort by start time
         self.recordings.sort(lambda l, o: cmp(l.start,o.start))
@@ -232,7 +232,7 @@ class RecordServer(object):
             OneShotTimer(self.epg_update).start(0.1)
             return True
         self.locked = True
-        self.epg.check_all(self.favorites, self.recordings, self.epg_update_callback)
+        self.epg.check(self.favorites, self.recordings, self.epg_update_callback)
 
 
     def epg_update_callback(self):
@@ -241,7 +241,7 @@ class RecordServer(object):
         self.locked = False
         self.reschedule()
 
-        
+
     #
     # load / save fxd file with recordings and favorites
     #
@@ -625,7 +625,7 @@ class RecordServer(object):
         elif self.epg.updating:
             # epg update in progress
             self.status.set('busy', 1)
-            
+
         # find next scheduled recordings for wakeup
         # FIXME: what about CONFLICT? we don't need to start the server
         # for a normal conflict, but we may need it when tvdev is not running
