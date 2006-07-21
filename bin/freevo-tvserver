@@ -147,8 +147,13 @@ def start():
 
     auth = mbus.cfg.hashkey.strip()
     host = mbus.addr['id'][mbus.addr['id'].find('@')+1:]
-    port = epg.server.rpc('server.start', 'blocking')(host + ':0', auth)[1]
-
+    port = epg.server.rpc('server.start', host + ':0', auth)
+    while not port.is_finished:
+        # FIXME: add this during runtime!
+        kaa.notifier.step()
+    port = port()[1]
+    print port
+    
     # make epg information public
     server.epgaddr = (host, port)
 
