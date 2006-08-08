@@ -152,7 +152,6 @@ def start():
         # FIXME: add this during runtime!
         kaa.notifier.step()
     port = port()[1]
-    print port
     
     # make epg information public
     server.epgaddr = (host, port)
