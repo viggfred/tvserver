@@ -48,6 +48,9 @@ if os.path.dirname(__file__) in sys.path:
     sys.path.remove(os.path.dirname(__file__))
 
 pid = -1
+
+read_fd, write_fd = os.pipe()
+
 if len(sys.argv) == 1:
     # Normal recordserver startup, fork epg client. We can not import kaa before
     # forking or the notifier will fail because the internal thread wakeup is
@@ -88,6 +91,11 @@ if not pid:
 
     guide = kaa.epg.Server(str(config.epg.database))
 
+    # sync with tvserver
+    os.write(write_fd, '0')
+    os.close(read_fd)
+    os.close(write_fd)
+    
     # run epg server
     kaa.main()
 
@@ -157,22 +165,16 @@ def start():
     server.epgaddr = (host, port)
 
 
+# sync with epgserver
+os.close(write_fd)
+if not len(os.read(read_fd, 1)):
+    log.error('unable to start epg server')
+    sys.exit(1)
+os.close(read_fd)
+
 # connect to the epg at client side
-num_trys = 1000
-while num_trys:
-    num_trys -= 1
-    try:
-        epg = kaa.epg.connect('epg')
-        epg.signals['connected'].connect_once(start)
-        break
-    except Exception, e:
-        if not num_trys:
-            log.exception('')
-            sys.exit(1)
-        if os.waitpid(pid, os.WNOHANG)[0] == pid:
-            log.error('unable to start epg server')
-            sys.exit(1)
-        time.sleep(0.01)
+epg = kaa.epg.connect('epg')
+epg.signals['connected'].connect_once(start)
 
 kaa.main()
 
