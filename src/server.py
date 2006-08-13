@@ -38,7 +38,6 @@ import sys
 import time
 import logging
 
-import kaa.thumb
 from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
 from kaa import xml
 
@@ -332,8 +331,6 @@ class RecordServer(object):
             filename = recording.url[5:]
             if os.path.isfile(filename):
                 recording.status = SAVED
-                # create thumbnail
-                kaa.thumb.videothumb(filename)
             else:
                 log.info('failed: file not found %s' % recording.url)
                 recording.status = FAILED
