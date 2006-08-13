@@ -76,7 +76,7 @@ if not pid:
 
     # remove handler, we want to set the look and avoid
     # duplicate handlers
-    for l in log.handlers:
+    for l in log.handlers[:]:
         log.removeHandler(l)
 
     handler = logging.FileHandler('%s/tvepg-%s' % (freevo.conf.LOGDIR, os.getuid()))
@@ -89,8 +89,11 @@ if not pid:
     # set basic recording debug to info
     log.setLevel(getattr(logging, config.loglevel))
 
-    guide = kaa.epg.Server(str(config.epg.database))
-
+    try:
+        guide = kaa.epg.Server(str(config.epg.database))
+    except Exception, e:
+        log.exception('unable to start epg server')
+        
     # sync with tvserver
     os.write(write_fd, '0')
     os.close(read_fd)
@@ -179,8 +182,10 @@ epg.signals['connected'].connect_once(start)
 kaa.main()
 
 # kill epg server
-# FIXME: make sure the server stops itself when the tvserver is gone
-os.kill(pid, 15)
+try:
+    os.kill(pid, 15)
+except (OSError, IOError):
+    log.error('failed to terminate epg server')
 
 # print debug at the end
-log.info('terminate')
+log.error('terminate')
