@@ -100,13 +100,13 @@ class Recording(object):
         self.stop_padding  = config.record.stop_padding
         for key, value in info.items():
             if key in ('subtitle', 'description') and value:
-                setattr(self, key, Unicode(value))
+                setattr(self, key, str_to_unicode(value))
             elif key == 'url' and value:
                 self.url = unicode_to_str(value)
             elif key in ('start-padding', 'stop_padding'):
                 setattr(self, key, int(value))
             elif value:
-                self.info[key] = Unicode(value)
+                self.info[key] = str_to_unicode(value)
 
         self.recorder = None
         self.respect_start_padding = True
@@ -154,9 +154,9 @@ class Recording(object):
         if self.episode:
             info['episode'] = self.episode
         if self.url:
-            info['url'] = Unicode(self.url)
+            info['url'] = str_to_unicode(self.url)
         if self.description:
-            info['description'] = Unicode(self.description)
+            info['description'] = str_to_unicode(self.description)
         return self.id, self.name, self.channel, self.priority, self.start, \
                self.stop, self.status, self.start_padding, self.stop_padding, \
                info

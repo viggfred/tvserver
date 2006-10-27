@@ -38,7 +38,7 @@ import logging
 
 # kaa imports
 from kaa import xml
-from kaa.strutils import unicode_to_str
+from kaa.strutils import unicode_to_str, str_to_unicode
 
 # record imports
 from config import config
@@ -135,7 +135,7 @@ class Favorite(object):
         """
         Return True if name, channel and start match this favorite.
         """
-        if Unicode(name.lower()) != self.name.lower() and not self.substring:
+        if str_to_unicode(name.lower()) != self.name.lower() and not self.substring:
             return False
         if name.lower().find(self.name.lower()) == -1:
             return False
