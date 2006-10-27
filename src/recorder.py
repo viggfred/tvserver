@@ -44,6 +44,7 @@ import logging
 
 # kaa imports
 from kaa.notifier import OneShotTimer, Signal
+from kaa.strutils import unicode_to_str
 import kaa.epg
 
 # freevo core imports
@@ -242,7 +243,7 @@ class Recorder(object):
         sys.exit(0)
 
     def normalize_name(self, name):
-        return String(name.replace('.', '').replace(' ', '')).upper().strip()
+        return unicode_to_str(name.replace('.', '').replace(' ', '')).upper().strip()
 
     def add_channel(self, chan_obj, chan_id):
         if chan_obj.name in self.known_channels:
@@ -349,8 +350,8 @@ class Recorder(object):
         Return url (e.g. filename) for the given recording
         """
         if not rec.url:
-            filename_array = { 'progname': String(rec.name),
-                               'title'   : String(rec.subtitle) }
+            filename_array = { 'progname': unicode_to_str(rec.name),
+                               'title'   : unicode_to_str(rec.subtitle) }
 
             filemask = config.record.filemask % filename_array
             filename = ''
@@ -423,7 +424,7 @@ class Recorder(object):
                 channel  = self.known_channels[rec.channel].tuner_id
                 filename = self.get_url(rec)
                 rec.url  = filename
-                log.info('%s: schedule %s' % (String(self.name), String(rec.name)))
+                log.info('%s: schedule %s', self.name, rec.name)
                 rpc = self.rpc('home-theatre.vdr.record', self.start_recording_cb)
                 rpc.call(self.device, channel, remote.start,
                          rec.stop + rec.stop_padding, filename, ())

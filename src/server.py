@@ -395,7 +395,7 @@ class RecordServer(object):
         """
         info = dict(info)
 
-        log.info('recording.add: %s' % String(name))
+        log.info('recording.add: %s', name)
         r = Recording(name, channel, priority, start, stop, info=info)
 
         if r in self.recordings:
@@ -559,7 +559,7 @@ class RecordServer(object):
         days is a list of days ( 0 = Sunday - 6 = Saturday )
         times is a list of hh:mm-hh:mm
         """
-        log.info('favorite.add: %s' % String(name))
+        log.info('favorite.add: %s', name)
         f = Favorite(name, channels, priority, days, times, once)
         if f in self.favorites:
             return NameError('Already scheduled')

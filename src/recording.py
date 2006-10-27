@@ -102,7 +102,7 @@ class Recording(object):
             if key in ('subtitle', 'description') and value:
                 setattr(self, key, Unicode(value))
             elif key == 'url' and value:
-                self.url = String(value)
+                self.url = unicode_to_str(value)
             elif key in ('start-padding', 'stop_padding'):
                 setattr(self, key, int(value))
             elif value:
@@ -190,10 +190,10 @@ class Recording(object):
             stop_padding = 0
 
         return '%3d %10s %-25s %4d %s-%s %2s %2s %s' % \
-               (self.id, String(channel), String(name),
+               (self.id, unicode_to_str(channel), unicode_to_str(name),
                 self.priority, _int2time(self.start)[4:],
                 _int2time(self.stop)[9:], start_padding,
-                stop_padding, String(status))
+                stop_padding, unicode_to_str(status))
 
 
     def __xml__(self):

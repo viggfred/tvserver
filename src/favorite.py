@@ -169,7 +169,7 @@ class Favorite(object):
             # url is string and an extra '/' is not allowed. Replace '/'
             # with '_' and also convert all args to string.
             for o in options:
-                options[o] = String(options[o]).replace('/', '_')
+                options[o] = unicode_to_str(options[o]).replace('/', '_')
         for pattern in re.findall('%\([a-z]*\)', text):
             if not str(pattern[2:-1]) in options:
                 options[pattern[2:-1]] = pattern
@@ -189,7 +189,7 @@ class Favorite(object):
         if self.url:
             # add url template to recording
             try:
-                rec.url = String(self.__fill_template(rec, self.url, True) + '.suffix')
+                rec.url = unicode_to_str(self.__fill_template(rec, self.url, True) + '.suffix')
             except Exception, e:
                 log.exception('Error setting recording url')
                 rec.url = ''
@@ -221,7 +221,7 @@ class Favorite(object):
         else:
             substring = '(exact matching)'
         return '%3d %-35s %4d %s %s' % \
-               (self.id, String(name), self.priority, once, substring)
+               (self.id, unicode_to_str(name), self.priority, once, substring)
 
 
     def __xml__(self):
