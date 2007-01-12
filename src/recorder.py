@@ -294,7 +294,8 @@ class Recorder(object):
                     # Stop here. The channel is in the mapping list but not
                     # detected by the system. Before we do some bad guessing,
                     # just set the channel to a non epg channel
-                    self.add_channel(kaa.epg.guide.new_channel(channel), channel)
+                    chan = kaa.epg.guide.new_channel(name=channel)
+                    self.add_channel(chan, channel)
                     continue
 
                 # Now we start the ugly part of guessing
