@@ -64,6 +64,19 @@ class EPG(object):
             }
         self.updating = False
 
+        # update config.epg.mapping information
+        channels = [ c.name for c in self.channels() ] + [ u'' ]
+        mapping = config.epg._cfg_get('mapping')
+        mapping._schema._type = channels
+        txt = '\nKnown channels are '
+        for c in channels:
+            if len(txt) + len(c) >= 78:
+                mapping._desc += txt.rstrip() + '\n'
+                txt = ''
+            txt += c + ', '
+        mapping._desc += txt.rstrip(', ')
+        config.save()
+
 
     def channels(self):
         """

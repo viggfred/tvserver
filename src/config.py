@@ -43,9 +43,10 @@ for name, module in sources:
     config.epg.add_variable(name, module.config)
 
 # EPG mapping
-config.epg.add_variable('mapping', Dict(name='mapping', type=unicode,
-                                        schema=Var(type=unicode),
-                                        desc=_('EPG channel mapping')))
+config.epg.add_variable('mapping', Dict(
+    name='mapping', type=unicode,
+    schema=Var(type=unicode),
+    desc=_('EPG channel mapping. Leave blank for channels without epg (case sentive).')))
 
 config.load('/etc/freevo/tvserver.conf')
 # if started as user add personal config file
