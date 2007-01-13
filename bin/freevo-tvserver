@@ -35,6 +35,7 @@
 import os
 import time
 import sys
+import getopt
 import logging
 
 # insert freevo path information
@@ -47,21 +48,71 @@ if not __site__ in sys.path:
 if os.path.dirname(__file__) in sys.path:
     sys.path.remove(os.path.dirname(__file__))
 
-pid = -1
+# kaa imports
+import kaa
+import kaa.utils
 
+def usage(error_code):
+    print 'freevo-tvserver [options]'
+    print 'options:'
+    print '--background        start tvserver in background'
+    print '--stop              stop running tvserver'
+    print '--interactive       interactive remote control'
+    print '--help | -h         this message'
+    sys.exit(error_code)
+
+
+try:
+    opts = [ 'background', 'stop', 'interactive', 'help' ]
+    opts, args = getopt.getopt(sys.argv[1:], 'h', opts)
+except getopt.GetoptError:
+    usage(1)
+
+
+for o, a in opts:
+    if o == '--background':
+        kaa.utils.daemonize()
+
+    if o == '--stop':
+
+        def new_entity(entity):
+            if entity.matches({'type': 'home-theatre', 'module': 'tvserver'}):
+                entity.shutdown()
+                sys.exit(0)
+
+        def not_running():
+            print 'tvserver not running'
+            sys.exit(1)
+
+        import kaa
+        import freevo.ipc
+
+        # connect to tvserver
+        mbus = freevo.ipc.Instance('freevo')
+        mbus.signals['new-entity'].connect(new_entity)
+        kaa.notifier.OneShotTimer(not_running).start(5)
+        kaa.main()
+        sys.exit(0)
+
+    if o == '--interactive':
+        # import interactive mode
+        from freevo.tvserver import interactive
+        kaa.main()
+        sys.exit(0)
+
+    if o in ('--help', '-h'):
+        usage(0)
+        sys.exit(0)
+
+
+# fork epg client.
 read_fd, write_fd = os.pipe()
-
-if len(sys.argv) == 1:
-    # Normal recordserver startup, fork epg client. We can not import kaa before
-    # forking or the notifier will fail because the internal thread wakeup is
-    # handled by two different processes.
-    pid = os.fork()
+pid = os.fork()
 
 if not pid:
     # This is the epg server. Import everything we need and start it
 
     # kaa imports
-    import kaa
     import kaa.epg
 
     # freevo core imports
@@ -93,12 +144,12 @@ if not pid:
         guide = kaa.epg.Server(str(config.epg.database))
     except Exception, e:
         log.exception('unable to start epg server')
-        
+
     # sync with tvserver
     os.write(write_fd, '0')
     os.close(read_fd)
     os.close(write_fd)
-    
+
     # run epg server
     kaa.main()
 
@@ -120,18 +171,6 @@ import freevo.ipc
 
 # get logging object
 log = logging.getLogger('record')
-
-if len(sys.argv) > 1:
-
-    if sys.argv[1] == '-i':
-        # import interactive mode
-        from freevo.tvserver import interactive
-
-        kaa.main()
-        sys.exit(0)
-
-    sys.exit(1)
-
 
 # get logging object
 log = logging.getLogger('record')
@@ -163,7 +202,7 @@ def start():
         # FIXME: add this during runtime!
         kaa.notifier.step()
     port = port()[1]
-    
+
     # make epg information public
     server.epgaddr = (host, port)
 
