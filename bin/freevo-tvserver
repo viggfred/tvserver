@@ -51,6 +51,15 @@ if os.path.dirname(__file__) in sys.path:
 # kaa imports
 import kaa
 import kaa.utils
+import kaa.epg
+
+# freevo core imports
+import freevo.conf
+import freevo.ipc
+
+# read the config file
+from freevo.tvserver.config import config
+
 
 def usage(error_code):
     print 'freevo-tvserver [options]'
@@ -71,27 +80,17 @@ except getopt.GetoptError:
 
 for o, a in opts:
     if o == '--background':
+        if kaa.utils.is_running('freevo-tvserver'):
+            print 'tvserver already running'
+            sys.exit(1)
         kaa.utils.daemonize()
 
     if o == '--stop':
-
-        def new_entity(entity):
-            if entity.matches({'type': 'home-theatre', 'module': 'tvserver'}):
-                entity.shutdown()
-                sys.exit(0)
-
-        def not_running():
+        pid = kaa.utils.is_running('freevo-tvserver')
+        if not pid:
             print 'tvserver not running'
             sys.exit(1)
-
-        import kaa
-        import freevo.ipc
-
-        # connect to tvserver
-        mbus = freevo.ipc.Instance('freevo')
-        mbus.signals['new-entity'].connect(new_entity)
-        kaa.notifier.OneShotTimer(not_running).start(5)
-        kaa.main()
+        os.kill(pid, 15)
         sys.exit(0)
 
     if o == '--interactive':
@@ -105,21 +104,19 @@ for o, a in opts:
         sys.exit(0)
 
 
+# check and mark as running
+if kaa.utils.is_running('freevo-tvserver'):
+    print 'tvserver already running'
+    sys.exit(1)
+
+kaa.utils.set_running('freevo-tvserver')
+
 # fork epg client.
 read_fd, write_fd = os.pipe()
 pid = os.fork()
 
 if not pid:
-    # This is the epg server. Import everything we need and start it
-
-    # kaa imports
-    import kaa.epg
-
-    # freevo core imports
-    import freevo.conf
-
-    # read the config file
-    from freevo.tvserver.config import config
+    # This is the epg server.
 
     # logger setup
     log = logging.getLogger()
@@ -160,17 +157,6 @@ if not pid:
 
 
 # At this point we are the main tvserver
-
-# kaa imports
-import kaa
-import kaa.epg
-
-# freevo core imports
-import freevo.conf
-import freevo.ipc
-
-# get logging object
-log = logging.getLogger('record')
 
 # get logging object
 log = logging.getLogger('record')
