@@ -105,20 +105,33 @@ class EPG(object):
         self._check_recordings_prepare(recordings, fav)
 
 
+    @kaa.notifier.yield_execution()
     def update(self):
         """
         Update the epg data in the epg server
         """
         if self.updating:
             log.info('epg update in progress')
-            return False
+            yield False
 
         self.updating = True
         sources = kaa.epg.sources.items()[:]
         sources.sort(lambda x,y: cmp(x[0], y[0]))
-        kaa.epg.guide.signals["updated"].connect(self._update_step, sources)
-        self._update_step(sources)
-        return True
+
+        while sources:
+            name, module = sources.pop(0)
+            if not module.config.activate:
+                log.info('skip epg update on %s', name)
+                continue
+
+            if kaa.epg.guide.status == kaa.epg.CONNECTED:
+                log.info('start epg update on %s', name)
+                yield kaa.epg.guide.update(name)
+            log.info('done epg update on %s', name)
+            
+        log.info('epg update complete')
+        self.updating = False
+        self.signals['updated'].emit()
 
 
     # -------------------------------------------------------------------------
@@ -254,25 +267,4 @@ class EPG(object):
 
         # done with this one favorite, call prepare again
         self._check_favorites_prepare(all_favorites, favorites, recordings, callback)
-        return True
-
-
-    def _update_step(self, sources):
-        """
-        Update the next source in the sources list
-        """
-        if not sources:
-            log.info('epg update complete')
-            kaa.epg.guide.signals["updated"].disconnect(self._update_step)
-            self.updating = False
-            self.signals['updated'].emit()
-            return True
-
-        name, module = sources.pop(0)
-        if not module.config.activate:
-            log.info('skip epg update on %s', name)
-            return self._update_step(sources)
-
-        log.info('start epg update on %s', name)
-        kaa.epg.guide.update(name)
         return True
