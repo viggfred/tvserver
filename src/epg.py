@@ -162,9 +162,8 @@ class EPG(object):
 
         # Try to find the exact title again. The epg call is async so we
         # create a callback for part 2 of this function and return.
-        search_callback = Callback(self._check_recordings, rec, recordings, callback)
-        kaa.epg.search(title = rec.name, channel=channel, time = interval,
-                       callback=search_callback)
+        ip = kaa.epg.search(title = rec.name, channel=channel, time = interval)
+        ip.connect(self._check_recordings, rec, recordings, callback)
 
 
     def _check_recordings(self, results, rec, recordings, callback):
@@ -221,15 +220,14 @@ class EPG(object):
         # Note: we can't use keyword searching here because it won't match
         # some favorite titles when they have short names.
 
-        search_callback = Callback(self._check_favorities, fav, all_favorites,
-                                   favorites, recordings, callback)
         if fav.substring:
             # unable to do that right now
-            kaa.epg.search(keywords=fav.name, callback=search_callback)
-            return
-        # 'like' search
-        kaa.epg.search(title=kaa.epg.QExpr('like', fav.name), callback=search_callback)
-
+            ip = kaa.epg.search(keywords=fav.name)
+        else:
+            # 'like' search
+            ip = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
+        ip.connect(self._check_favorities, fav, all_favorites,
+                   favorites, recordings, callback)
 
     def _check_favorities(self, listing, fav, all_favorites, favorites, recordings,
                           callback):
