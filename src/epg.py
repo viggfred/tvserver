@@ -36,7 +36,7 @@ import time
 import logging
 
 # kaa imports
-from kaa.notifier import OneShotTimer, Timer, Signal, Callback
+import kaa.notifier
 
 # freevo imports
 import kaa.epg
@@ -59,8 +59,8 @@ class EPG(object):
 
     def __init__(self):
         self.signals = {
-            'changed': Signal(),
-            'updated': Signal()
+            'changed': kaa.notifier.Signal(),
+            'updated': kaa.notifier.Signal()
             }
         self.updating = False
 
@@ -85,24 +85,113 @@ class EPG(object):
         return kaa.epg.get_channels()
 
 
-    def check(self, favorites, recordings, callback, *args, **kwargs):
+    @kaa.notifier.yield_execution()
+    def check(self, recordings, favorites):
         """
-        Check recordings and favorites against epg.
+        Check recordings
         """
-        if callback:
-            # convert callback to a timer with all args
-            callback = OneShotTimer(callback, *args, **kwargs)
-
-        # create callback for _check_recordings_prepare to call the favorites
-        # checker with the original callback
-        fav = Callback(self._check_favorites_prepare, favorites, favorites[:],
-                       recordings, callback)
-
-        # get list of recordings to check in _check_recordings
+        # Note: this function takes a lot of time. But we don't need to call
+        # YieldContinue because every kaa.epg search yield will go back to
+        # the main loop.
         ctime = time.time() + 60 * 15
-        recordings = [ r for r in recordings if r.start - r.start_padding > ctime \
-                       and r.status in (CONFLICT, SCHEDULED) ]
-        self._check_recordings_prepare(recordings, fav)
+        to_check = [ r for r in recordings if r.start - r.start_padding > ctime \
+                     and r.status in (CONFLICT, SCHEDULED) ]
+        # check recordings
+        while to_check:
+            # get one recording to check
+            rec = to_check.pop(0)
+
+            # Search epg for that recording. The recording should be at the
+            # same time, maybe it has moved +- 20 minutes. If the program
+            # moved a larger time interval, it won't be found again.
+            interval = (rec.start - 20 * 60, rec.start + 20 * 60)
+
+            channel = kaa.epg.get_channel(rec.channel)
+            if not channel:
+                log.error('unable to find %s in epg database', rec.channel)
+                continue
+
+            # Try to find the exact title again.
+            wait = kaa.epg.search(title = rec.name, channel=channel, time = interval)
+            yield wait
+            results = wait()
+
+            for epginfo in results:
+                # check all results
+                if epginfo.start == rec.start and epginfo.stop == rec.stop:
+                    # found the recording
+                    log.debug('found recording: %s', rec.name)
+                    break
+            else:
+                # try to find it
+                for epginfo in results:
+                    if rec.start - 20 * 60 < epginfo.start < rec.start + 20 * 60:
+                        # found it again, set new start and stop time
+                        old_info = str(rec)
+                        rec.start = epginfo.start
+                        rec.stop = epginfo.stop
+                        log.info('changed schedule\n%s\n%s' % (old_info, rec))
+                        self.signals['changed'].emit(rec)
+                        break
+                else:
+                    log.info('unable to find recording in epg:\n%s' % rec)
+                    continue
+
+            # check if attributes changed
+            for attr in ('description', 'episode', 'subtitle'):
+                newattr = getattr(epginfo, attr)
+                oldattr = getattr(rec, attr)
+                if (newattr or oldattr) and newattr != oldattr:
+                    log.info('%s changed for %s', attr, rec.name)
+                    setattr(rec, attr, getattr(epginfo, attr))
+
+        # check favorites
+        to_check = favorites[:]
+        while to_check:
+            # get favorite to check
+            fav = to_check.pop(0)
+
+            # Now search the db.
+            # Note: we can't use keyword searching here because it won't match
+            # some favorite titles when they have short names.
+
+            if fav.substring:
+                # unable to do that right now
+                wait = kaa.epg.search(keywords=fav.name)
+            else:
+                # 'like' search
+                wait = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
+            yield wait
+            listing = wait()
+
+            now = time.time()
+            for p in listing:
+                if not fav.match(p.title, p.channel.name, p.start):
+                    continue
+                if p.stop < now:
+                    # do not add old stuff
+                    continue
+                rec = Recording(p.title, p.channel.id, fav.priority,
+                                p.start, p.stop,
+                                info={ "episode":p.episode,
+                                       "subtitle":p.subtitle,
+                                       "description":p.description } )
+
+                if rec in recordings:
+                    # This does not only avoid adding recordings twice, it
+                    # also prevents from added a deleted favorite as active
+                    # again.
+                    continue
+
+                fav.add_data(rec)
+                recordings.append(rec)
+                log.info('added\n%s', rec)
+
+                self.signals['changed'].emit(rec)
+
+                if fav.once:
+                    favorites.remove(fav)
+                    break
 
 
     @kaa.notifier.yield_execution()
@@ -128,141 +217,7 @@ class EPG(object):
                 log.info('start epg update on %s', name)
                 yield kaa.epg.guide.update(name)
             log.info('done epg update on %s', name)
-            
+
         log.info('epg update complete')
         self.updating = False
         self.signals['updated'].emit()
-
-
-    # -------------------------------------------------------------------------
-    # Private Functions
-    # -------------------------------------------------------------------------
-
-    def _check_recordings_prepare(self, recordings, callback):
-        """
-        Check one recording (Part 1)
-        """
-        if not recordings:
-            # start callback (check favorites)
-            callback()
-            return False
-
-        # get one recording to check
-        rec = recordings.pop(0)
-
-        # Search epg for that recording. The recording should be at the
-        # same time, maybe it has moved +- 20 minutes. If the program
-        # moved a larger time interval, it won't be found again.
-        interval = (rec.start - 20 * 60, rec.start + 20 * 60)
-
-        channel = kaa.epg.get_channel(rec.channel)
-        if not channel:
-            log.error('unable to find %s in epg database', rec.channel)
-            return self._check_recordings_prepare(recordings, callback)
-
-        # Try to find the exact title again. The epg call is async so we
-        # create a callback for part 2 of this function and return.
-        ip = kaa.epg.search(title = rec.name, channel=channel, time = interval)
-        ip.connect(self._check_recordings, rec, recordings, callback)
-
-
-    def _check_recordings(self, results, rec, recordings, callback):
-        """
-        Check one recording (Part 2)
-        """
-        for epginfo in results:
-            # check all results
-            if epginfo.start == rec.start and epginfo.stop == rec.stop:
-                # found the recording
-                log.debug('found recording: %s', rec.name)
-                break
-        else:
-            # try to find it
-            for epginfo in results:
-                if rec.start - 20 * 60 < epginfo.start < rec.start + 20 * 60:
-                    # found it again, set new start and stop time
-                    old_info = str(rec)
-                    rec.start = epginfo.start
-                    rec.stop = epginfo.stop
-                    log.info('changed schedule\n%s\n%s' % (old_info, rec))
-                    self.signals['changed'].emit(rec)
-                    break
-            else:
-                log.info('unable to find recording in epg:\n%s' % rec)
-                return self._check_recordings_prepare(recordings, callback)
-
-        # check if attributes changed
-        for attr in ('description', 'episode', 'subtitle'):
-            newattr = getattr(epginfo, attr)
-            oldattr = getattr(rec, attr)
-            if (newattr or oldattr) and newattr != oldattr:
-                log.info('%s changed for %s', attr, rec.name)
-                setattr(rec, attr, getattr(epginfo, attr))
-        return self._check_recordings_prepare(recordings, callback)
-
-
-    def _check_favorites_prepare(self, all_favorites, favorites, recordings, callback):
-        """
-        Check one favorite (Part 1)
-        """
-        if not favorites:
-            # start callback
-            if callback:
-                callback.start(0)
-            return False
-
-        # get favorite to check
-        fav = favorites.pop(0)
-
-        # Now search the db. The epg call is async so we create a callback for
-        # part 2 of this function and return.
-        #
-        # Note: we can't use keyword searching here because it won't match
-        # some favorite titles when they have short names.
-
-        if fav.substring:
-            # unable to do that right now
-            ip = kaa.epg.search(keywords=fav.name)
-        else:
-            # 'like' search
-            ip = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
-        ip.connect(self._check_favorities, fav, all_favorites,
-                   favorites, recordings, callback)
-
-    def _check_favorities(self, listing, fav, all_favorites, favorites, recordings,
-                          callback):
-        """
-        Check one favorite (Part 2)
-        """
-        now = time.time()
-        for p in listing:
-            if not fav.match(p.title, p.channel.name, p.start):
-                continue
-            if p.stop < now:
-                # do not add old stuff
-                continue
-            rec = Recording(p.title, p.channel.id, fav.priority,
-                            p.start, p.stop,
-			    info={ "episode":p.episode,
-				   "subtitle":p.subtitle,
-				   "description":p.description } )
-
-            if rec in recordings:
-                # This does not only avoid adding recordings twice, it
-                # also prevents from added a deleted favorite as active
-                # again.
-                continue
-
-            fav.add_data(rec)
-            recordings.append(rec)
-            log.info('added\n%s', rec)
-
-            self.signals['changed'].emit(rec)
-
-            if fav.once:
-                all_favorites.remove(fav)
-                break
-
-        # done with this one favorite, call prepare again
-        self._check_favorites_prepare(all_favorites, favorites, recordings, callback)
-        return True

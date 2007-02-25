@@ -38,6 +38,7 @@ import sys
 import time
 import logging
 
+import kaa.notifier
 from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
 from kaa import xml
 
@@ -222,6 +223,7 @@ class RecordServer(object):
         return True
 
 
+    @kaa.notifier.yield_execution()
     def epg_update(self):
         """
         Update recordings based on favorites and epg.
@@ -229,14 +231,10 @@ class RecordServer(object):
         if self.locked:
             # system busy, call again later
             OneShotTimer(self.epg_update).start(0.1)
-            return True
+            return
         self.locked = True
-        self.epg.check(self.favorites, self.recordings, self.epg_update_callback)
-
-
-    def epg_update_callback(self):
-        """
-        """
+        wait = self.epg.check(self.recordings, self.favorites)
+        yield wait
         self.locked = False
         self.reschedule()
 
