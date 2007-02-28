@@ -234,7 +234,8 @@ class RecordServer(object):
             return
         self.locked = True
         wait = self.epg.check(self.recordings, self.favorites)
-        yield wait
+        if isinstance(wait, kaa.notifier.InProgress):
+            yield wait
         self.locked = False
         self.reschedule()
 
