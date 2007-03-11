@@ -215,7 +215,12 @@ class EPG(object):
 
             if kaa.epg.guide.status == kaa.epg.CONNECTED:
                 log.info('start epg update on %s', name)
-                yield kaa.epg.guide.update(name)
+                wait = kaa.epg.guide.update(name)
+                yield wait
+                try:
+                    wait()
+                except Exception, e:
+                    log.exception(e)
             log.info('done epg update on %s', name)
 
         log.info('epg update complete')
