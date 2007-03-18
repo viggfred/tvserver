@@ -155,7 +155,7 @@ class RecorderList(object):
             # no recorder
             yield True
 
-        wait = entity.rpc2('home-theatre.device.list')
+        wait = entity.rpc('home-theatre.device.list')
         yield wait
         result = wait()
         if not result:
@@ -255,7 +255,7 @@ class Recorder(object):
     def _describe(self):
         """
         """
-        wait = self.entity.rpc2('home-theatre.device.describe', self.device)
+        wait = self.entity.rpc('home-theatre.device.describe', self.device)
         yield wait
         result = wait()
         if not result:
@@ -425,7 +425,7 @@ class Recorder(object):
                 filename = self.get_url(rec)
                 rec.url  = filename
                 log.info('%s: schedule %s', self.name, rec.name)
-                wait = self.entity.rpc2(
+                wait = self.entity.rpc(
                     'home-theatre.vdr.record', self.device, channel, remote.start,
                     rec.stop + rec.stop_padding, filename, ())
                 yield wait
@@ -441,7 +441,7 @@ class Recorder(object):
                 # remove the recording
                 log.info('%s: remove %s', self.name, remote.recording.name)
                 self.recordings.remove(remote)
-                wait = self.entity.rpc2('home-theatre.vdr.remove', remote_id)
+                wait = self.entity.rpc('home-theatre.vdr.remove', remote_id)
                 yield wait
                 result = wait()
                 if not result:
