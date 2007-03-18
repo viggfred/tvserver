@@ -9,7 +9,7 @@
 #
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+# Copyright (C) 2002-2007 Krister Lagerstrom, Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -45,6 +45,7 @@ import logging
 # kaa imports
 from kaa.notifier import OneShotTimer, Signal
 from kaa.strutils import unicode_to_str
+import kaa.notifier
 import kaa.epg
 
 # freevo core imports
@@ -94,7 +95,6 @@ def get_recorder(channel=None):
 
 # internal 'unique' ids
 UNKNOWN_ID  = -1
-IN_PROGRESS = -2
 
 class RecorderList(object):
     def __init__(self):
@@ -146,22 +146,18 @@ class RecorderList(object):
         return self.recorder.__iter__()
 
 
+    @kaa.notifier.yield_execution()
     def new_entity(self, entity):
         """
         Update recorders on entity changes.
         """
         if not entity.matches({'type': 'home-theatre', 'module': 'tvdev'}):
             # no recorder
-            return True
+            yield True
 
-        entity.rpc('home-theatre.device.list', self.mbus_list_cb, entity).call()
-        return True
-
-
-    def mbus_list_cb(self, result, entity):
-        """
-        RPC return for device.list()
-        """
+        wait = entity.rpc2('home-theatre.device.list')
+        yield wait
+        result = wait()
         if not result:
             log.error(result)
             return
@@ -221,13 +217,12 @@ class Recorder(object):
         self.check_timer = OneShotTimer(self.check_recordings)
         self.livetv = {}
         self.entity.signals['lost-entity'].connect(self.lost_entity)
-        self.rpc = self.entity.rpc
-        self.rpc('home-theatre.device.describe', self.describe_cb).call(device)
         self.rating = 0
         self.known_channels   = {}
+        self._describe()
+        
 
-
-    def __str__(self):
+    def __repr__(self):
         return '<Recorder for %s>' % (self.name)
 
 
@@ -245,6 +240,7 @@ class Recorder(object):
     def normalize_name(self, name):
         return unicode_to_str(name.replace('.', '').replace(' ', '')).upper().strip()
 
+
     def add_channel(self, chan_obj, chan_id):
         if chan_obj.name in self.known_channels:
             # duplicate, skip it
@@ -254,14 +250,18 @@ class Recorder(object):
         self.known_channels[chan_obj.name] = chan_obj
         self.possible_bouquets[-1].append(chan_obj.name)
 
-    def describe_cb(self, result):
+
+    @kaa.notifier.yield_execution()
+    def _describe(self):
         """
-        RPC return for device.describe()
         """
+        wait = self.entity.rpc2('home-theatre.device.describe', self.device)
+        yield wait
+        result = wait()
         if not result:
             log.error(result)
             self.handler.remove(self)
-            return
+            yield False
 
         self.possible_bouquets = []
 
@@ -405,20 +405,19 @@ class Recorder(object):
         self.check_timer.start(0.1)
 
 
+    @kaa.notifier.yield_execution(lock=True)
     def check_recordings(self):
         """
         Check the internal list of recordings and add or remove them from
         the recorder.
         """
         for remote in copy.copy(self.recordings):
-            if remote.id == IN_PROGRESS:
-                # already checking
-                break
             if remote.id == UNKNOWN_ID and not remote.valid:
                 # remove it from the list, looks like the recording
                 # was already removed and not yet scheduled
                 self.recordings.remove(remote)
                 continue
+
             if remote.id == UNKNOWN_ID:
                 # add the recording
                 rec      = remote.recording
@@ -426,56 +425,29 @@ class Recorder(object):
                 filename = self.get_url(rec)
                 rec.url  = filename
                 log.info('%s: schedule %s', self.name, rec.name)
-                rpc = self.rpc('home-theatre.vdr.record', self.start_recording_cb)
-                rpc.call(self.device, channel, remote.start,
-                         rec.stop + rec.stop_padding, filename, ())
-                remote.id = IN_PROGRESS
-                break
+                wait = self.entity.rpc2(
+                    'home-theatre.vdr.record', self.device, channel, remote.start,
+                    rec.stop + rec.stop_padding, filename, ())
+                yield wait
+                result = wait()
+                if not result:
+                    log.error(result)
+                    self.handler.remove(self)
+                    yield False
+                remote.id = result[0]
+                continue
+
             if not remote.valid:
                 # remove the recording
                 log.info('%s: remove %s', self.name, remote.recording.name)
-                try:
-                    rpc = self.rpc('home-theatre.vdr.remove', self.start_recording_cb)
-                    rpc.call(remote_id)
-                except:
-                    pass
                 self.recordings.remove(remote)
-                break
-        # the function will be rescheduled by mbus return
-        return False
-
-
-    def start_recording_cb(self, result):
-        """
-        Callback for vdr.record
-        """
-        if not result:
-            log.error(result)
-            self.handler.remove(self)
-            return
-
-        # result is an unique id
-        for remote in self.recordings:
-            if remote.id == IN_PROGRESS:
-                remote.id = result[0]
-                break
-        else:
-            log.info('id not found')
-
-        # check more recordings
-        self.check_recordings()
-
-
-    def remove_recording_cb(self, result):
-        """
-        Callback for vdr.remove
-        """
-        if not result:
-            log.error(result)
-            self.handler.remove(self)
-            return
-        # check more recordings
-        self.check_recordings()
+                wait = self.entity.rpc2('home-theatre.vdr.remove', remote_id)
+                yield wait
+                result = wait()
+                if not result:
+                    log.error(result)
+                    self.handler.remove(self)
+                    yield False
 
 
     # ****************************************************************************
@@ -484,6 +456,7 @@ class Recorder(object):
 
 
     def start_livetv(self, channel, url):
+        raise RuntimeError('livetv not working')
         log.info('start live tv')
 
         rpc = self.rpc('home-theatre.vdr.record', self.start_livetv_cb)
@@ -513,6 +486,7 @@ class Recorder(object):
 
     def stop_livetv(self, id):
         log.info('stop live tv')
+        raise RuntimeError('livetv not working')
         if not id in self.livetv:
             # FIXME: handle error
             log.error('id not in list')
