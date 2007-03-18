@@ -40,10 +40,10 @@ import logging
 
 import kaa.notifier
 from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
-from kaa import xml
 
 # freevo imports
 import freevo.ipc
+import freevo.fxdparser2
 
 # record imports
 from config import config
@@ -255,12 +255,12 @@ class RecordServer(object):
             return
 
         try:
-            fxd = xml.Document(self.fxdfile, 'freevo')
+            fxd = freevo.fxdparser2.Document(self.fxdfile)
         except Exception, e:
             log.exception('recordserver.load: %s corrupt:' % self.fxdfile)
             sys.exit(1)
 
-        for child in fxd:
+        for child in fxd.children:
             if child.name == 'recording':
                 try:
                     r = Recording(node=child)
@@ -293,11 +293,11 @@ class RecordServer(object):
         save the fxd file
         """
         log.info('save fxd file')
-        fxd = xml.Document(root='freevo')
+        fxd = freevo.fxdparser2.Document()
         for r in self.recordings:
-            fxd.add_child(r)
+            r.toxml(fxd)
         for f in self.favorites:
-            fxd.add_child(f)
+            f.toxml(fxd)
         fxd.save(self.fxdfile)
 
 

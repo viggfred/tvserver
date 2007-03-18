@@ -40,8 +40,10 @@ import logging
 import os
 
 # kaa imports
-from kaa import xml
 from kaa.strutils import unicode_to_str, str_to_unicode
+
+# freevo imports
+import freevo.fxdparser2
 
 # record imports
 from config import config
@@ -196,11 +198,11 @@ class Recording(object):
                 stop_padding, unicode_to_str(status))
 
 
-    def __xml__(self):
+    def toxml(self, root):
         """
         Dump informations about the recording in a fxd file node.
         """
-        node = xml.Node('recording', id=self.id)
+        node = root.add_child('recording', id=self.id)
         for var in ('name', 'channel', 'priority', 'status',
                     'subtitle', 'fxdname', 'episode', 'description'):
             if getattr(self, var):
@@ -271,7 +273,7 @@ class Recording(object):
             return
 
         # create root node
-        fxd = xml.Document(root='freevo')
+        fxd = freevo.fxdparser2.Document()
 
         # create <movie> with title
         title = self.name
