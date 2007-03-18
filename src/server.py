@@ -43,7 +43,7 @@ from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
 
 # freevo imports
 import freevo.ipc
-import freevo.fxdparser2
+import freevo.fxdparser
 
 # record imports
 from config import config
@@ -255,7 +255,7 @@ class RecordServer(object):
             return
 
         try:
-            fxd = freevo.fxdparser2.Document(self.fxdfile)
+            fxd = freevo.fxdparser.Document(self.fxdfile)
         except Exception, e:
             log.exception('recordserver.load: %s corrupt:' % self.fxdfile)
             sys.exit(1)
@@ -293,7 +293,7 @@ class RecordServer(object):
         save the fxd file
         """
         log.info('save fxd file')
-        fxd = freevo.fxdparser2.Document()
+        fxd = freevo.fxdparser.Document()
         for r in self.recordings:
             r.toxml(fxd)
         for f in self.favorites:

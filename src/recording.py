@@ -43,7 +43,7 @@ import os
 from kaa.strutils import unicode_to_str, str_to_unicode
 
 # freevo imports
-import freevo.fxdparser2
+import freevo.fxdparser
 
 # record imports
 from config import config
@@ -273,7 +273,7 @@ class Recording(object):
             return
 
         # create root node
-        fxd = freevo.fxdparser2.Document()
+        fxd = freevo.fxdparser.Document()
 
         # create <movie> with title
         title = self.name
