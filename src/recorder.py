@@ -441,7 +441,7 @@ class Recorder(object):
                 # remove the recording
                 log.info('%s: remove %s', self.name, remote.recording.name)
                 self.recordings.remove(remote)
-                wait = self.entity.rpc('home-theatre.vdr.remove', remote_id)
+                wait = self.entity.rpc('home-theatre.vdr.remove', remote.id)
                 yield wait
                 result = wait()
                 if not result:
