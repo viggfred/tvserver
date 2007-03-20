@@ -412,6 +412,12 @@ class Recorder(object):
         the recorder.
         """
         for remote in copy.copy(self.recordings):
+            if not self.entity:
+                # entity is gone
+                log.info('%s: remove %s', self.name, remote.recording.name)
+                self.recordings.remove(remote)
+                continue
+                
             if remote.id == UNKNOWN_ID and not remote.valid:
                 # remove it from the list, looks like the recording
                 # was already removed and not yet scheduled
