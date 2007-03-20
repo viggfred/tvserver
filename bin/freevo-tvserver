@@ -64,7 +64,7 @@ from freevo.tvserver.config import config
 def usage(error_code):
     print 'freevo-tvserver [options]'
     print 'options:'
-    print '--background        start tvserver in background'
+    print '--fg                start tvserver in foreground'
     print '--stop              stop running tvserver'
     print '--interactive       interactive remote control'
     print '--help | -h         this message'
@@ -72,18 +72,16 @@ def usage(error_code):
 
 
 try:
-    opts = [ 'background', 'stop', 'interactive', 'help' ]
+    opts = [ 'fg', 'stop', 'interactive', 'help' ]
     opts, args = getopt.getopt(sys.argv[1:], 'h', opts)
 except getopt.GetoptError:
     usage(1)
 
 
+detach = True
 for o, a in opts:
-    if o == '--background':
-        if kaa.utils.is_running('freevo-tvserver'):
-            print 'tvserver already running'
-            sys.exit(1)
-        kaa.utils.daemonize()
+    if o == '--fg':
+        detach = False
 
     if o == '--stop':
         pid = kaa.utils.is_running('freevo-tvserver')
@@ -108,6 +106,9 @@ for o, a in opts:
 if kaa.utils.is_running('freevo-tvserver'):
     print 'tvserver already running'
     sys.exit(1)
+
+if detach:
+    kaa.utils.daemonize()
 
 kaa.utils.set_running('freevo-tvserver')
 
