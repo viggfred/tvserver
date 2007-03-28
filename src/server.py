@@ -58,9 +58,9 @@ from epg import EPG
 # get logging object
 log = logging.getLogger('record')
 
-class RecordServer(object):
+class TvServer(object):
     """
-    Class for the recordserver. It handles the rpc calls and checks the
+    Class for the tvserver. It handles the rpc calls and checks the
     schedule for recordings and favorites.
     """
     LIVE_TV_ID = 0
@@ -257,7 +257,7 @@ class RecordServer(object):
         try:
             fxd = freevo.fxdparser.Document(self.fxdfile)
         except Exception, e:
-            log.exception('recordserver.load: %s corrupt:' % self.fxdfile)
+            log.exception('tvserver.load: %s corrupt:' % self.fxdfile)
             sys.exit(1)
 
         for child in fxd.children:
@@ -265,7 +265,7 @@ class RecordServer(object):
                 try:
                     r = Recording(node=child)
                 except Exception, e:
-                    log.exception('recordserver.load_recording')
+                    log.exception('tvserver.load_recording')
                     continue
                 if r.status == RECORDING:
                     log.warning('recording in status \'recording\'')
@@ -282,7 +282,7 @@ class RecordServer(object):
                 try:
                     f = Favorite(node=child)
                 except Exception, e:
-                    log.exception('recordserver.load_favorite:')
+                    log.exception('tvserver.load_favorite:')
                     continue
                 self.favorites.append(f)
 
@@ -478,8 +478,8 @@ class RecordServer(object):
             # Already sending a stream of this channel, reuse it
             channel.registered.append(source)
 
-            RecordServer.LIVE_TV_ID += 1
-            id = RecordServer.LIVE_TV_ID
+            TvServer.LIVE_TV_ID += 1
+            id = TvServer.LIVE_TV_ID
             self.live_tv_map[id] = channel
 
             return [ id, url ]
@@ -500,8 +500,8 @@ class RecordServer(object):
         channel.recorder = rec, rec_id
         channel.registered.append(source)
 
-        RecordServer.LIVE_TV_ID += 1
-        id = RecordServer.LIVE_TV_ID
+        TvServer.LIVE_TV_ID += 1
+        id = TvServer.LIVE_TV_ID
         self.live_tv_map[id] = channel
 
         # return id and url

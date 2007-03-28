@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# recordserver.py - start script for the recordserver
+# freevo-tvserver.py - start script for the tvserver
 # -----------------------------------------------------------------------------
 # $Id$
 #
@@ -173,11 +173,11 @@ def start():
     # set basic recording debug to info
     log.setLevel(getattr(logging, config.loglevel))
 
-    # import recordserver
-    from freevo.tvserver.server import RecordServer
+    # import tvserver
+    from freevo.tvserver.server import TvServer
 
-    # start recordserver
-    server = RecordServer()
+    # start tvserver
+    server = TvServer()
 
     # get mbus address for epg settings
     mbus = freevo.ipc.Instance('tvserver')

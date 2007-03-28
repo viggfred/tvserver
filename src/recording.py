@@ -167,7 +167,7 @@ class Recording(object):
     def __str__(self):
         """
         A simple string representation for a recording for debugging in the
-        recordserver.
+        tvserver.
         """
         channel = self.channel
         if len(channel) > 10:

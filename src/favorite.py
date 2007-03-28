@@ -220,7 +220,7 @@ class Favorite(object):
     def __str__(self):
         """
         A simple string representation for a favorite for debugging in the
-        recordserver.
+        tvserver.
         """
         name = self.name
         if len(name) > 30:

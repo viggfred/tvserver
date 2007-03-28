@@ -1,6 +1,6 @@
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# conflict.py - resolve conflicts for the recordserver
+# conflict.py - resolve conflicts for the tvserver
 # -----------------------------------------------------------------------------
 # $Id$
 #

@@ -208,7 +208,7 @@ class Recorder(object):
 
     def __init__(self, entity, handler, device):
         self.type = 'recorder'
-        # reference to the recordserver
+        # reference to the tvserver
         self.handler = handler
         self.entity = entity
         self.device = device
