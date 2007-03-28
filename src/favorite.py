@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 # $Id$
 #
-# Example for favorite in recordserver.fxd
+# Example for favorite in tvschedule.fxd
 #
 # <favorite id="1">
 #     <name>Genial daneben - Die Comedy-Arena</name>

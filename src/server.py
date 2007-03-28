@@ -82,7 +82,7 @@ class RecordServer(object):
             channel.registered = []
 
         # file to load / save the recordings and favorites
-        self.fxdfile = freevo.conf.datafile('recordserver.fxd')
+        self.fxdfile = freevo.conf.datafile('tvschedule.fxd')
         # load the recordings file
         self.load()
 
