@@ -4,15 +4,30 @@
 # -----------------------------------------------------------------------------
 # $Id$
 #
+# Example for favorite in recordserver.fxd
+#
+# <favorite id="1">
+#     <name>Genial daneben - Die Comedy-Arena</name>
+#     <priority>50</priority>
+#     <days>5 6</days>
+#     <channels>
+#         <channel>SAT1</channel>
+#     </channels>
+#     <times>
+#         <start>20:10-20:20</start>
+#         <start>21:00-23:50</start>
+#     </times>
+#     <padding start="0" stop="0"/>
+# </favorite>
 #
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+# Copyright (C) 2005-2007 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
 #
-# Please see the file doc/CREDITS for a complete list of authors.
+# Please see the file AUTHORS for a complete list of authors.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -95,16 +110,16 @@ class Favorite(object):
                 self.substring = True
             if child.name == 'channels':
                 self.channels = []
-                for v in child.content.split(' '):
-                    self.channels.append(v)
+                for c in child.children:
+                    self.channels.append(c.content)
             if child.name == 'days':
                 self.days = []
                 for v in child.content.split(' '):
                     self.days.append(int(v))
             if child.name == 'times':
                 self.times = []
-                for v in child.content.split(' '):
-                    m = _time_re.match(v).groups()
+                for t in child.children:
+                    m = _time_re.match(t.content).groups()
                     start = int(m[0])*100 + int(m[1])
                     stop  = int(m[2])*100 + int(m[3])
                     self.times.append((start, stop))
@@ -231,16 +246,14 @@ class Favorite(object):
         for var in ('name', 'priority', 'url', 'fxdname'):
             if getattr(self, var):
                 node.add_child(var, getattr(self, var))
-        for var in ('channels', 'days'):
-            s = ''
-            for v in getattr(self, var):
-                s += '%s ' % v
-            node.add_child(var, s[:-1])
-        s = ''
-        for v in self.times:
-            s += '%02d:%02d-%02d:%02d ' % (v[0] / 100, v[0] % 100,
-                                           v[1] / 100, v[1] % 100)
-        node.add_child('times', s[:-1])
+        node.add_child('days', ' '.join([ str(d) for d in self.days]))
+        channels = node.add_child('channels')
+        for chan in self.channels:
+            channels.add_child('channel', chan)
+        times = node.add_child('times')
+        for t in self.times:
+            times.add_child('start', '%02d:%02d-%02d:%02d' % \
+                            (t[0] / 100, t[0] % 100, t[1] / 100, t[1] % 100))
         if self.once:
             node.add_child('once')
         if self.substring:
