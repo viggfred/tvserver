@@ -563,18 +563,42 @@ class TvServer(object):
         if f in self.favorites:
             return NameError('Already scheduled')
         self.favorites.append(f)
-        self.rpc_favorite_update()
+
+        # update schedule
+        self.epg_update()
+        
+        # send update to all clients
+        msg = [ f.long_list() for f in self.favorites ]
+        self.send_event('home-theatre.favorite.list.update', *msg)
         return []
 
 
-    @freevo.ipc.expose('home-theatre.favorite.list', add_source=True)
-    def rpc_favorite_list(self, source):
+    @freevo.ipc.expose('home-theatre.favorite.remove')
+    def rpc_favorite_remove(self, id):
         """
+        remove a favorite
+        parameter: id of the favorite
         """
-        ret = []
         for f in self.favorites:
-            ret.append(f.long_list())
-        return ret
+            if id == f.id:
+                break
+        else:
+            return NameError('Favorite not found!')
+        log.info('favorite.remove: %s', f)
+        self.favorites.remove(f)
+
+        # send update to all clients
+        msg = [ f.long_list() for f in self.favorites ]
+        self.send_event('home-theatre.favorite.list.update', *msg)
+        return []
+
+
+    @freevo.ipc.expose('home-theatre.favorite.list')
+    def rpc_favorite_list(self):
+        """
+        Return list of all favorites
+        """
+        return [ f.long_list() for f in self.favorites ]
 
 
     #
