@@ -29,18 +29,17 @@ config = Config(desc=_('TV Server configuration'), schema=[
         desc=_('default filemask for recordings')),
     Var(name='dir', default='',
         desc=_('directory where to store recordings')) ]),
+    ])
 
-    # epg group
-    Group(name='epg', desc=_('EPG settings'), schema=[
-    Var(name='database', default=freevo.conf.datafile('epg.sqlite'),
-        desc=_('epg database file'))
-    ])
-    ])
-# Now add the source config
-sources = kaa.epg.sources.items()
-sources.sort(lambda x,y: cmp(x[0], y[0]))
-for name, module in sources:
-    config.epg.add_variable(name, module.config)
+
+# add kaa.epg data
+config.add_variable('epg', kaa.epg.config)
+
+# db location
+config.epg.add_variable('database', Var(
+    name='database',
+    default=freevo.conf.datafile('epg.sqlite'),
+    desc=_('epg database file')))
 
 # EPG mapping
 config.epg.add_variable('mapping', Dict(

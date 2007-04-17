@@ -204,24 +204,16 @@ class EPG(object):
             yield False
 
         self.updating = True
-        sources = kaa.epg.sources.items()[:]
-        sources.sort(lambda x,y: cmp(x[0], y[0]))
 
-        while sources:
-            name, module = sources.pop(0)
-            if not module.config.activate:
-                log.info('skip epg update on %s', name)
-                continue
-
-            if kaa.epg.guide.status == kaa.epg.CONNECTED:
-                log.info('start epg update on %s', name)
-                wait = kaa.epg.guide.update(name)
-                yield wait
-                try:
-                    wait()
-                except Exception, e:
-                    log.exception(e)
-            log.info('done epg update on %s', name)
+        # start update
+        # FIXME: latest kaa.epg changes do not block the rpc
+        # until the update is complete. That is a bug here!
+        wait = kaa.epg.guide.update(name)
+        yield wait
+        try:
+            wait()
+        except Exception, e:
+            log.exception(e)
 
         log.info('epg update complete')
         self.updating = False
