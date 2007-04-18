@@ -66,13 +66,12 @@ def usage(error_code):
     print 'options:'
     print '--fg                start tvserver in foreground'
     print '--stop              stop running tvserver'
-    print '--interactive       interactive remote control'
     print '--help | -h         this message'
     sys.exit(error_code)
 
 
 try:
-    opts = [ 'fg', 'stop', 'interactive', 'help' ]
+    opts = [ 'fg', 'stop', 'help' ]
     opts, args = getopt.getopt(sys.argv[1:], 'h', opts)
 except getopt.GetoptError:
     usage(1)
@@ -89,12 +88,6 @@ for o, a in opts:
             print 'tvserver not running'
             sys.exit(1)
         os.kill(pid, 15)
-        sys.exit(0)
-
-    if o == '--interactive':
-        # import interactive mode
-        from freevo.tvserver import interactive
-        kaa.main()
         sys.exit(0)
 
     if o in ('--help', '-h'):
