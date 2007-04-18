@@ -171,7 +171,7 @@ class EPG(object):
                 if p.stop < now:
                     # do not add old stuff
                     continue
-                rec = Recording(p.title, p.channel.id, fav.priority,
+                rec = Recording(p.title, p.channel.name, fav.priority,
                                 p.start, p.stop,
                                 info={ "episode":p.episode,
                                        "subtitle":p.subtitle,
@@ -208,7 +208,7 @@ class EPG(object):
         # start update
         # FIXME: latest kaa.epg changes do not block the rpc
         # until the update is complete. That is a bug here!
-        wait = kaa.epg.guide.update(name)
+        wait = kaa.epg.guide.update()
         yield wait
         try:
             wait()
