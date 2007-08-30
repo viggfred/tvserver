@@ -433,10 +433,10 @@ class TvServer(object):
 
 
     @freevo.ipc.expose('home-theatre.recording.modify')
-    def rpc_recording_modify(self, int, info):
+    def rpc_recording_modify(self, id, info):
         """
         modify a recording
-        parameter: id [ ( var val ) (...) ]
+        parameter: id, [ ( var, val ) (...) ]
         """
         key_val = dict(info)
         log.info('recording.modify: %s' % id)
@@ -564,6 +564,12 @@ class TvServer(object):
             return NameError('Already scheduled')
         self.favorites.append(f)
 
+        # Align favorites id(s)
+        next = 0
+        for r in self.favorites:
+            r.id = next
+            next += 1
+
         # update schedule
         self.epg_update()
         
@@ -586,11 +592,40 @@ class TvServer(object):
             return NameError('Favorite not found!')
         log.info('favorite.remove: %s', f)
         self.favorites.remove(f)
+        
+        # Align favorites id(s)
+        next = 0
+        for r in self.favorites:
+            r.id = next
+            next += 1
 
         # send update to all clients
         msg = [ f.long_list() for f in self.favorites ]
         self.send_event('home-theatre.favorite.list.update', *msg)
         return []
+
+
+    @freevo.ipc.expose('home-theatre.favorite.modify')
+    def rpc_favorite_modify(self, id, info):
+        """
+        modify a recording
+        parameter: id, [ ( var, val ) (...) ]
+        """
+        key_val = dict(info)
+        log.info('favorite.modify: %s' % id)
+        for r in self.favorites:
+            if r.id == id:
+                cp = copy.copy(self.favorites[id])
+                for key in key_val:
+                    setattr(cp, key, key_val[key])
+                self.favorites[self.favorites.index(r)] = cp
+                # update schedule
+                self.epg_update()
+                # send update to all clients
+                msg = [ f.long_list() for f in self.favorites ]
+                self.send_event('home-theatre.favorite.list.update', *msg)
+                return []
+        return IndexError('Favorite not found')
 
 
     @freevo.ipc.expose('home-theatre.favorite.list')

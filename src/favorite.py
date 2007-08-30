@@ -81,16 +81,11 @@ class Favorite(object):
         self.channels  = channels
         self.priority  = priority
         self.days      = days
-        self.times     = []
         self.url       = ''
         self.fxdname   = ''
         self.once      = once
         self.substring = substring
-        for t in times:
-            m = _time_re.match(t).groups()
-            start = int(m[0])*100 + int(m[1])
-            stop  = int(m[2])*100 + int(m[3])
-            self.times.append((start, stop))
+        self.times     = times
         self.start_padding = config.record.start_padding
         self.stop_padding  = config.record.stop_padding
 
@@ -119,10 +114,7 @@ class Favorite(object):
             if child.name == 'times':
                 self.times = []
                 for t in child.children:
-                    m = _time_re.match(t.content).groups()
-                    start = int(m[0])*100 + int(m[1])
-                    stop  = int(m[2])*100 + int(m[3])
-                    self.times.append((start, stop))
+                    self.times.append(t.content)
             if child.name == 'padding':
                 self.start_padding = int(child.getattr('start'))
                 self.stop_padding  = int(child.getattr('stop'))
@@ -159,8 +151,11 @@ class Favorite(object):
         if not int(time.strftime('%w', timestruct)) in self.days:
             return False
         stime = int(timestruct[3]) * 100 + int(timestruct[4])
-        for t1, t2 in self.times:
-            if stime >= t1 and stime <= t2:
+        for t in self.times:
+            m = _time_re.match(t).groups()
+            start = int(m[0])*100 + int(m[1])
+            stop  = int(m[2])*100 + int(m[3])
+            if stime >= start and stime <= stop:
                 return True
         return False
 
@@ -252,8 +247,7 @@ class Favorite(object):
             channels.add_child('channel', chan)
         times = node.add_child('times')
         for t in self.times:
-            times.add_child('start', '%02d:%02d-%02d:%02d' % \
-                            (t[0] / 100, t[0] % 100, t[1] / 100, t[1] % 100))
+            times.add_child('start', t)
         if self.once:
             node.add_child('once')
         if self.substring:
