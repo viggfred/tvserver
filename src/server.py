@@ -38,8 +38,7 @@ import sys
 import time
 import logging
 
-import kaa.notifier
-from kaa.notifier import Timer, OneShotTimer, Callback, execute_in_timer
+import kaa
 
 # freevo imports
 import freevo.ipc
@@ -96,9 +95,9 @@ class TvServer(object):
         self.epg_update()
 
         # add schedule timer for SCHEDULE_TIMER / 3 seconds
-        Timer(self.schedule).start(SCHEDULE_TIMER / 3)
+        kaa.Timer(self.schedule).start(SCHEDULE_TIMER / 3)
 
-        Timer(self.update_status).start(60)
+        kaa.Timer(self.update_status).start(60)
 
         # create mbus instance
         mbus = freevo.ipc.Instance('tvserver')
@@ -115,7 +114,7 @@ class TvServer(object):
         self.update_status()
 
 
-    @execute_in_timer(OneShotTimer, 0.1, type='once')
+    @kaa.execute_in_timer(kaa.OneShotTimer, 0.1, type='once')
     def print_schedule(self):
         """
         Print current schedule (for debug only)
@@ -154,7 +153,7 @@ class TvServer(object):
         """
         if self.locked:
             # system busy, call again later
-            OneShotTimer(self.reschedule).start(0.1)
+            kaa.OneShotTimer(self.reschedule).start(0.1)
             return True
         self.locked = True
         self.scheduler.schedule(self.recordings)
@@ -198,7 +197,7 @@ class TvServer(object):
         """
         if self.locked:
             # system busy, call again later
-            OneShotTimer(self.schedule).start(0.1)
+            kaa.OneShotTimer(self.schedule).start(0.1)
             return True
 
         log.info('calling self.schedule')
@@ -223,18 +222,18 @@ class TvServer(object):
         return True
 
 
-    @kaa.notifier.yield_execution()
+    @kaa.yield_execution()
     def epg_update(self):
         """
         Update recordings based on favorites and epg.
         """
         if self.locked:
             # system busy, call again later
-            OneShotTimer(self.epg_update).start(0.1)
+            kaa.OneShotTimer(self.epg_update).start(0.1)
             return
         self.locked = True
         wait = self.epg.check(self.recordings, self.favorites)
-        if isinstance(wait, kaa.notifier.InProgress):
+        if isinstance(wait, kaa.InProgress):
             yield wait
         self.locked = False
         self.reschedule()
@@ -287,7 +286,7 @@ class TvServer(object):
                 self.favorites.append(f)
 
 
-    @execute_in_timer(OneShotTimer, 1, type='override')
+    @kaa.execute_in_timer(kaa.OneShotTimer, 1, type='override')
     def save(self):
         """
         save the fxd file

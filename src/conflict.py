@@ -60,9 +60,8 @@
 import logging
 import time
 
-# kaa notifier for step
-import kaa.notifier
-from kaa.notifier import Timer, OneShotTimer, execute_in_timer
+# kaa imports
+import kaa
 
 # record imports
 import recorder
@@ -147,7 +146,7 @@ class Conflict(object):
         self.callback = callback
 
 
-    @execute_in_timer(OneShotTimer, 0.01, type='override')
+    @kaa.execute_in_timer(kaa.OneShotTimer, 0.01, type='override')
     def scan(self, recordings, schedule):
         """
         Scan the schedule for conflicts. A conflict is a list of recordings
@@ -212,7 +211,7 @@ class Conflict(object):
         return False
 
 
-    @execute_in_timer(Timer, 0, type='override')
+    @kaa.execute_in_timer(kaa.Timer, 0, type='override')
     def resolve_step(self, devices, schedule):
         """
         Find and resolve conflicts in recordings.

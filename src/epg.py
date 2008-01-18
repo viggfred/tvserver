@@ -36,7 +36,7 @@ import time
 import logging
 
 # kaa imports
-import kaa.notifier
+import kaa
 
 # freevo imports
 import kaa.epg
@@ -59,8 +59,8 @@ class EPG(object):
 
     def __init__(self):
         self.signals = {
-            'changed': kaa.notifier.Signal(),
-            'updated': kaa.notifier.Signal()
+            'changed': kaa.Signal(),
+            'updated': kaa.Signal()
             }
         self.updating = False
 
@@ -85,7 +85,7 @@ class EPG(object):
         return kaa.epg.get_channels()
 
 
-    @kaa.notifier.yield_execution()
+    @kaa.yield_execution()
     def check(self, recordings, favorites):
         """
         Check recordings
@@ -194,7 +194,7 @@ class EPG(object):
                     break
 
 
-    @kaa.notifier.yield_execution()
+    @kaa.yield_execution()
     def update(self):
         """
         Update the epg data in the epg server

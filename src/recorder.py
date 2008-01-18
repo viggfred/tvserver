@@ -43,9 +43,8 @@ import copy
 import logging
 
 # kaa imports
-from kaa.notifier import OneShotTimer, Signal
+import kaa
 from kaa.strutils import unicode_to_str
-import kaa.notifier
 import kaa.epg
 
 # freevo core imports
@@ -62,9 +61,9 @@ log = logging.getLogger('record')
 _recorder = None
 
 # signals for this module
-signals = { 'changed': Signal(),
-            'start-recording': Signal(),
-            'stop-recording': Signal()
+signals = { 'changed': kaa.Signal(),
+            'start-recording': kaa.Signal(),
+            'stop-recording': kaa.Signal()
           }
 
 def connect():
@@ -146,7 +145,7 @@ class RecorderList(object):
         return self.recorder.__iter__()
 
 
-    @kaa.notifier.yield_execution()
+    @kaa.yield_execution()
     def new_entity(self, entity):
         """
         Update recorders on entity changes.
@@ -214,7 +213,7 @@ class Recorder(object):
         self.device = device
         self.name = '%s:%s' % (entity.addr['id'], device)
         self.recordings = []
-        self.check_timer = OneShotTimer(self.check_recordings)
+        self.check_timer = kaa.OneShotTimer(self.check_recordings)
         self.livetv = {}
         self.entity.signals['lost-entity'].connect(self.lost_entity)
         self.rating = 0
@@ -251,7 +250,7 @@ class Recorder(object):
         self.possible_bouquets[-1].append(chan_obj.name)
 
 
-    @kaa.notifier.yield_execution()
+    @kaa.yield_execution()
     def _describe(self):
         """
         """
@@ -328,7 +327,7 @@ class Recorder(object):
             config.save()
 
         if error:
-            OneShotTimer(self.sys_exit).start(1)
+            kaa.OneShotTimer(self.sys_exit).start(1)
             return
 
         self.rating = result[1]
@@ -405,7 +404,7 @@ class Recorder(object):
         self.check_timer.start(0.1)
 
 
-    @kaa.notifier.yield_execution(lock=True)
+    @kaa.yield_execution(lock=True)
     def check_recordings(self):
         """
         Check the internal list of recordings and add or remove them from
