@@ -404,7 +404,7 @@ class Recorder(object):
         self.check_timer.start(0.1)
 
 
-    @kaa.yield_execution(lock=True)
+    @kaa.yield_execution(synchronize = True)
     def check_recordings(self):
         """
         Check the internal list of recordings and add or remove them from
