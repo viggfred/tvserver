@@ -232,9 +232,7 @@ class TvServer(object):
             kaa.OneShotTimer(self.epg_update).start(0.1)
             return
         self.locked = True
-        wait = self.epg.check(self.recordings, self.favorites)
-        if isinstance(wait, kaa.InProgress):
-            yield wait
+        yield self.epg.check(self.recordings, self.favorites)
         self.locked = False
         self.reschedule()
 

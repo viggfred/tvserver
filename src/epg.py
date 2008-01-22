@@ -112,9 +112,7 @@ class EPG(object):
                 continue
 
             # Try to find the exact title again.
-            wait = kaa.epg.search(title = rec.name, channel=channel, time = interval)
-            yield wait
-            results = wait()
+            results = yield kaa.epg.search(title=rec.name, channel=channel, time=interval)
 
             for epginfo in results:
                 # check all results
@@ -157,12 +155,10 @@ class EPG(object):
 
             if fav.substring:
                 # unable to do that right now
-                wait = kaa.epg.search(keywords=fav.name)
+                listing = yield kaa.epg.search(keywords=fav.name)
             else:
                 # 'like' search
-                wait = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
-            yield wait
-            listing = wait()
+                listing = yield kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
 
             now = time.time()
             for p in listing:
@@ -205,13 +201,8 @@ class EPG(object):
 
         self.updating = True
 
-        # start update
-        # FIXME: latest kaa.epg changes do not block the rpc
-        # until the update is complete. That is a bug here!
-        wait = kaa.epg.guide.update()
-        yield wait
         try:
-            wait()
+            yield kaa.epg.guide.update()
         except Exception, e:
             log.exception(e)
 

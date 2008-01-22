@@ -29,7 +29,13 @@
 #
 # -----------------------------------------------------------------------------
 
+import sys
 from freevo.distribution import setup
+
+# We require python 2.5 or later, so complain if that isn't satisfied.
+if sys.version.split()[0] < '2.5':
+    print "Python 2.5 or later required."
+    sys.exit(1)
 
 # now start the python magic
 setup (name         = 'freevo-tvserver',
