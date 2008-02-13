@@ -52,7 +52,7 @@ import time
 import logging
 
 # kaa imports
-from kaa.strutils import unicode_to_str, str_to_unicode
+import kaa
 
 # record imports
 from config import config
@@ -98,7 +98,7 @@ class Favorite(object):
                 if child.name == var:
                     setattr(self, var, child.content)
             if child.name == 'url':
-                self.url = unicode_to_str(child.content)
+                self.url = kaa.unicode_to_str(child.content)
             if child.name == 'once':
                 self.once = True
             if child.name == 'substring':
@@ -141,7 +141,7 @@ class Favorite(object):
         """
         Return True if name, channel and start match this favorite.
         """
-        if str_to_unicode(name.lower()) != self.name.lower() and not self.substring:
+        if kaa.str_to_unicode(name.lower()) != self.name.lower() and not self.substring:
             return False
         if name.lower().find(self.name.lower()) == -1:
             return False
@@ -178,7 +178,7 @@ class Favorite(object):
             # url is string and an extra '/' is not allowed. Replace '/'
             # with '_' and also convert all args to string.
             for o in options:
-                options[o] = unicode_to_str(options[o]).replace('/', '_')
+                options[o] = kaa.unicode_to_str(options[o]).replace('/', '_')
         for pattern in re.findall('%\([a-z]*\)', text):
             if not str(pattern[2:-1]) in options:
                 options[pattern[2:-1]] = pattern
@@ -198,7 +198,7 @@ class Favorite(object):
         if self.url:
             # add url template to recording
             try:
-                rec.url = unicode_to_str(self.__fill_template(rec, self.url, True) + '.suffix')
+                rec.url = kaa.unicode_to_str(self.__fill_template(rec, self.url, True) + '.suffix')
             except Exception, e:
                 log.exception('Error setting recording url')
                 rec.url = ''
@@ -230,7 +230,7 @@ class Favorite(object):
         else:
             substring = '(exact matching)'
         return '%3d %-35s %4d %s %s' % \
-               (self.id, unicode_to_str(name), self.priority, once, substring)
+               (self.id, kaa.unicode_to_str(name), self.priority, once, substring)
 
 
     def toxml(self, root):

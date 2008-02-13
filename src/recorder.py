@@ -44,7 +44,6 @@ import logging
 
 # kaa imports
 import kaa
-from kaa.strutils import unicode_to_str
 import kaa.epg
 
 # freevo core imports
@@ -235,7 +234,7 @@ class Recorder(object):
         sys.exit(0)
 
     def normalize_name(self, name):
-        return unicode_to_str(name.replace('.', '').replace(' ', '')).upper().strip()
+        return kaa.unicode_to_str(name.replace('.', '').replace(' ', '')).upper().strip()
 
 
     def add_channel(self, chan_obj, chan_id):
@@ -346,8 +345,8 @@ class Recorder(object):
         Return url (e.g. filename) for the given recording
         """
         if not rec.url:
-            filename_array = { 'progname': unicode_to_str(rec.name),
-                               'title'   : unicode_to_str(rec.subtitle) }
+            filename_array = { 'progname': kaa.unicode_to_str(rec.name),
+                               'title'   : kaa.unicode_to_str(rec.subtitle) }
 
             filemask = config.record.filemask % filename_array
             filename = ''

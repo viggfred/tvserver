@@ -40,7 +40,7 @@ import logging
 import os
 
 # kaa imports
-from kaa.strutils import unicode_to_str, str_to_unicode
+import kaa
 
 # freevo imports
 import freevo.fxdparser
@@ -102,13 +102,13 @@ class Recording(object):
         self.stop_padding  = config.record.stop_padding
         for key, value in info.items():
             if key in ('subtitle', 'description') and value:
-                setattr(self, key, str_to_unicode(value))
+                setattr(self, key, kaa.str_to_unicode(value))
             elif key == 'url' and value:
-                self.url = unicode_to_str(value)
+                self.url = kaa.unicode_to_str(value)
             elif key in ('start-padding', 'stop_padding'):
                 setattr(self, key, int(value))
             elif value:
-                self.info[key] = str_to_unicode(value)
+                self.info[key] = kaa.str_to_unicode(value)
 
         self.recorder = None
         self.respect_start_padding = True
@@ -124,7 +124,7 @@ class Recording(object):
                 if child.name == var:
                     setattr(self, var, child.content)
             if child.name == 'url':
-                self.url = unicode_to_str(child.content)
+                self.url = kaa.unicode_to_str(child.content)
             if child.name == 'priority':
                 self.priority = int(child.content)
             if child.name == 'padding':
@@ -156,9 +156,9 @@ class Recording(object):
         if self.episode:
             info['episode'] = self.episode
         if self.url:
-            info['url'] = str_to_unicode(self.url)
+            info['url'] = kaa.str_to_unicode(self.url)
         if self.description:
-            info['description'] = str_to_unicode(self.description)
+            info['description'] = kaa.str_to_unicode(self.description)
         return self.id, self.name, self.channel, self.priority, self.start, \
                self.stop, self.status, self.start_padding, self.stop_padding, \
                info
@@ -192,10 +192,10 @@ class Recording(object):
             stop_padding = 0
 
         return '%3d %10s %-25s %4d %s-%s %2s %2s %s' % \
-               (self.id, unicode_to_str(channel), unicode_to_str(name),
+               (self.id, kaa.unicode_to_str(channel), kaa.unicode_to_str(name),
                 self.priority, _int2time(self.start)[4:],
                 _int2time(self.stop)[9:], start_padding,
-                stop_padding, unicode_to_str(status))
+                stop_padding, kaa.unicode_to_str(status))
 
 
     def toxml(self, root):
@@ -208,7 +208,7 @@ class Recording(object):
             if getattr(self, var):
                 node.add_child(var, getattr(self, var))
         if self.url:
-            node.add_child('url', str_to_unicode(self.url))
+            node.add_child('url', kaa.str_to_unicode(self.url))
 
         node.add_child('timer', start=_int2time(self.start), stop=_int2time(self.stop))
         node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
