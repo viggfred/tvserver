@@ -114,7 +114,7 @@ class TvServer(object):
         self.update_status()
 
 
-    @kaa.execute_in_timer(kaa.OneShotTimer, 0.1, type='once')
+    @kaa.timed(0.1, kaa.OneShotTimer, type=kaa.POLICY_ONCE)
     def print_schedule(self):
         """
         Print current schedule (for debug only)
@@ -284,7 +284,7 @@ class TvServer(object):
                 self.favorites.append(f)
 
 
-    @kaa.execute_in_timer(kaa.OneShotTimer, 1, type='override')
+    @kaa.timed(1, kaa.OneShotTimer, policy=kaa.POLICY_RESTART)
     def save(self):
         """
         save the fxd file

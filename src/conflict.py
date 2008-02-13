@@ -146,7 +146,7 @@ class Conflict(object):
         self.callback = callback
 
 
-    @kaa.execute_in_timer(kaa.OneShotTimer, 0.01, type='override')
+    @kaa.timed(0.01, kaa.OneShotTimer, policy=kaa.POLICY_RESTART)
     def scan(self, recordings, schedule):
         """
         Scan the schedule for conflicts. A conflict is a list of recordings
@@ -211,7 +211,7 @@ class Conflict(object):
         return False
 
 
-    @kaa.execute_in_timer(kaa.Timer, 0, type='override')
+    @kaa.timed(0, policy=kaa.POLICY_RESTART)
     def resolve_step(self, devices, schedule):
         """
         Find and resolve conflicts in recordings.
