@@ -222,7 +222,7 @@ class TvServer(object):
         return True
 
 
-    @kaa.yield_execution()
+    @kaa.coroutine()
     def epg_update(self):
         """
         Update recordings based on favorites and epg.

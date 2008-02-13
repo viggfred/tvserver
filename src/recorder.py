@@ -145,7 +145,7 @@ class RecorderList(object):
         return self.recorder.__iter__()
 
 
-    @kaa.yield_execution()
+    @kaa.coroutine()
     def new_entity(self, entity):
         """
         Update recorders on entity changes.
@@ -248,7 +248,7 @@ class Recorder(object):
         self.possible_bouquets[-1].append(chan_obj.name)
 
 
-    @kaa.yield_execution()
+    @kaa.coroutine()
     def _describe(self):
         """
         """
@@ -400,7 +400,7 @@ class Recorder(object):
         self.check_timer.start(0.1)
 
 
-    @kaa.yield_execution(synchronize = True)
+    @kaa.coroutine(synchronize = True)
     def check_recordings(self):
         """
         Check the internal list of recordings and add or remove them from

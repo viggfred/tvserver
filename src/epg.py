@@ -85,7 +85,7 @@ class EPG(object):
         return kaa.epg.get_channels()
 
 
-    @kaa.yield_execution()
+    @kaa.coroutine()
     def check(self, recordings, favorites):
         """
         Check recordings
@@ -190,7 +190,7 @@ class EPG(object):
                     break
 
 
-    @kaa.yield_execution()
+    @kaa.coroutine()
     def update(self):
         """
         Update the epg data in the epg server
