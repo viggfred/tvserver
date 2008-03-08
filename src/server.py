@@ -114,7 +114,7 @@ class TvServer(object):
         self.update_status()
 
 
-    @kaa.timed(0.1, kaa.OneShotTimer, type=kaa.POLICY_ONCE)
+    @kaa.timed(0.1, kaa.OneShotTimer, policy=kaa.POLICY_ONCE)
     def print_schedule(self):
         """
         Print current schedule (for debug only)
