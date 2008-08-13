@@ -399,7 +399,7 @@ class Recorder(object):
         self.check_timer.start(0.1)
 
 
-    @kaa.coroutine(synchronize = True)
+    @kaa.coroutine(policy=kaa.POLICY_SYNCHRONIZED)
     def check_recordings(self):
         """
         Check the internal list of recordings and add or remove them from
