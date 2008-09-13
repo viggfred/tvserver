@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<config>
+    <group name="recording">
+        <desc>Default settings for recordings</desc>
+        <var name="filemask" default="%%m-%%d %%H:%%M %(progname)s - %(title)s">
+            <desc lang="en">
+                Default filemask for recordings
+            </desc>
+        </var>
+        <var name="directory" type="str">
+            <desc lang="en">
+                Directory where to store recordings
+            </desc>
+        </var>
+        <var name="start_padding" default="60">
+            <desc lang="en">
+                Try to start all recordings before their time with the given padding
+            </desc>
+        </var>
+        <var name="stop_padding" default="60">
+            <desc lang="en">
+                Try to keep the recording running for the given padding
+            </desc>
+        </var>
+    </group>
+    <group name="rpc">
+        <desc>Remote access to the server</desc>
+        <var name="address" default="127.0.0.1:7600">
+            <desc lang="en">
+                IP address and port to use for inter-process communication
+            </desc>
+        </var>
+        <var name="password" type="str">
+            <desc lang="en">
+                Password to secure the communication
+            </desc>
+        </var>
+    </group>
+    <group name="epg">
+        <desc>EPG settings</desc>
+        <var name="database" default="$(HOME)/.freevo/epg.db">
+            <desc lang="en">
+                Location of the EPG database
+            </desc>
+        </var>
+    </group>
+    <code>
+        import kaa.epg
+        for cfg in kaa.epg.update.config.get_variables():
+            config.epg.add_variable(cfg, kaa.epg.update.config._cfg_get(cfg))
+    </code>
+</config>

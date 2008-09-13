@@ -4,15 +4,14 @@
 # -----------------------------------------------------------------------------
 # $Id$
 #
-#
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+# Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
 #
-# Please see the file doc/CREDITS for a complete list of authors.
+# Please see the file AUTHORS for a complete list of authors.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -98,8 +97,8 @@ class Recording(object):
         self.scheduled_start    = 0
         self.scheduled_stop     = 0
 
-        self.start_padding = config.record.start_padding
-        self.stop_padding  = config.record.stop_padding
+        self.start_padding = config.recording.start_padding
+        self.stop_padding  = config.recording.stop_padding
         for key, value in info.items():
             if key in ('subtitle', 'description') and value:
                 setattr(self, key, kaa.str_to_unicode(value))
@@ -138,32 +137,6 @@ class Recording(object):
                     self.info[info.name] = info.content
 
 
-    def short_list(self):
-        """
-        Return a short list with informations about the recording.
-        """
-        return self.id, self.channel, self.priority, self.start, \
-               self.stop, self.status
-
-
-    def long_list(self):
-        """
-        Return a long list with every information about the recording.
-        """
-        info = copy.copy(self.info)
-        if self.subtitle:
-            info['subtitle'] = self.subtitle
-        if self.episode:
-            info['episode'] = self.episode
-        if self.url:
-            info['url'] = kaa.str_to_unicode(self.url)
-        if self.description:
-            info['description'] = kaa.str_to_unicode(self.description)
-        return self.id, self.name, self.channel, self.priority, self.start, \
-               self.stop, self.status, self.start_padding, self.stop_padding, \
-               info
-
-
     def __str__(self):
         """
         A simple string representation for a recording for debugging in the
@@ -198,7 +171,25 @@ class Recording(object):
                 stop_padding, kaa.unicode_to_str(status))
 
 
-    def toxml(self, root):
+    def to_list(self):
+        """
+        Return a long list with every information about the recording.
+        """
+        info = copy.copy(self.info)
+        if self.subtitle:
+            info['subtitle'] = self.subtitle
+        if self.episode:
+            info['episode'] = self.episode
+        if self.url:
+            info['url'] = kaa.str_to_unicode(self.url)
+        if self.description:
+            info['description'] = kaa.str_to_unicode(self.description)
+        return self.id, self.name, self.channel, self.priority, self.start, \
+               self.stop, self.status, int(self.start_padding), \
+               int(self.stop_padding), info
+
+
+    def to_xml(self, root):
         """
         Dump informations about the recording in a fxd file node.
         """

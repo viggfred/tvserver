@@ -4,15 +4,14 @@
 # -----------------------------------------------------------------------------
 # $Id$
 #
-#
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+# Copyright (C) 2006-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
 #
-# Please see the file doc/CREDITS for a complete list of authors.
+# Please see the file AUTHORS for a complete list of authors.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -31,6 +30,7 @@
 # -----------------------------------------------------------------------------
 
 # python imports
+import os
 import sys
 import time
 import logging
@@ -60,24 +60,27 @@ class EPG(object):
     def __init__(self):
         self.signals = {
             'changed': kaa.Signal(),
-            'updated': kaa.Signal()
             }
-        self.updating = False
+        # get kaa.epg database filename
+        db = os.path.expandvars(os.path.expanduser(config.epg.database)).\
+             replace('$(HOME)', os.environ.get('HOME'))
+        kaa.epg.load(db)
 
         # update config.epg.mapping information
-        channels = [ c.name for c in self.channels() ] + [ u'' ]
-        mapping = config.epg._cfg_get('mapping')
-        mapping._schema._type = channels
-        txt = '\nKnown channels are '
-        for c in channels:
-            if len(txt) + len(c) >= 78:
-                mapping._desc += txt.rstrip() + '\n'
-                txt = ''
-            txt += c + ', '
-        mapping._desc += txt.rstrip(', ')
-        config.save()
+#         channels = [ c.name for c in self.channels ] + [ u'' ]
+#         mapping = config.epg._cfg_get('mapping')
+#         mapping._schema._type = channels
+#         txt = '\nKnown channels are '
+#         for c in channels:
+#             if len(txt) + len(c) >= 78:
+#                 mapping._desc += txt.rstrip() + '\n'
+#                 txt = ''
+#             txt += c + ', '
+#         mapping._desc += txt.rstrip(', ')
+#         config.save()
 
 
+    @property
     def channels(self):
         """
         Return list of channels.
@@ -90,14 +93,13 @@ class EPG(object):
         """
         Check recordings
         """
-        # Note: this function takes a lot of time. But we don't need to call
-        # YieldContinue because every kaa.epg search yield will go back to
-        # the main loop.
         ctime = time.time() + 60 * 15
         to_check = [ r for r in recordings if r.start - r.start_padding > ctime \
                      and r.status in (CONFLICT, SCHEDULED) ]
         # check recordings
         while to_check:
+            if len(to_check) % 10 == 0:
+                yield kaa.NotFinished
             # get one recording to check
             rec = to_check.pop(0)
 
@@ -112,7 +114,7 @@ class EPG(object):
                 continue
 
             # Try to find the exact title again.
-            results = yield kaa.epg.search(title=rec.name, channel=channel, time=interval)
+            results = kaa.epg.search(title=rec.name, channel=channel, time=interval)
 
             for epginfo in results:
                 # check all results
@@ -155,10 +157,10 @@ class EPG(object):
 
             if fav.substring:
                 # unable to do that right now
-                listing = yield kaa.epg.search(keywords=fav.name)
+                listing = kaa.epg.search(keywords=fav.name)
             else:
                 # 'like' search
-                listing = yield kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
+                listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
 
             now = time.time()
             for p in listing:
@@ -188,24 +190,3 @@ class EPG(object):
                 if fav.once:
                     favorites.remove(fav)
                     break
-
-
-    @kaa.coroutine()
-    def update(self):
-        """
-        Update the epg data in the epg server
-        """
-        if self.updating:
-            log.info('epg update in progress')
-            yield False
-
-        self.updating = True
-
-        try:
-            yield kaa.epg.guide.update()
-        except Exception, e:
-            log.exception(e)
-
-        log.info('epg update complete')
-        self.updating = False
-        self.signals['updated'].emit()

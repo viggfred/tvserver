@@ -9,11 +9,11 @@
 #
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+# Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
 #
-# Please see the file doc/CREDITS for a complete list of authors.
+# Please see the file AUTHORS for a complete list of authors.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -38,6 +38,9 @@ import sys
 import getopt
 import logging
 
+# get logging object
+log = logging.getLogger('tvserver')
+
 # insert freevo path information
 __site__ = '../lib/python%s.%s/site-packages' % sys.version_info[:2]
 __site__ = os.path.abspath(os.path.join(os.path.dirname(__file__), __site__))
@@ -51,15 +54,9 @@ if os.path.dirname(__file__) in sys.path:
 # kaa imports
 import kaa
 import kaa.utils
-import kaa.epg
-
-# freevo core imports
-import freevo.conf
-import freevo.ipc
 
 # read the config file
 from freevo.tvserver.config import config
-
 
 def usage(error_code):
     print 'freevo-tvserver [options]'
@@ -94,6 +91,24 @@ for o, a in opts:
         usage(0)
         sys.exit(0)
 
+# load config file
+config.load('/etc/freevo/tvserver.conf')
+# if started as user add personal config file
+if os.getuid() > 0:
+    cfgdir = os.path.expanduser('~/.freevo')
+    config.load(os.path.join(cfgdir, 'tvserver.conf'))
+
+# save the file again in case it did not exist or the variables changed
+config.save()
+
+# check if a record dir is set
+if not config.recording.directory or not os.path.isdir(config.recording.directory):
+    log.error('Please set recording.directory to a valid directory.')
+    log.error('Check the global config file /etc/freevo/tvserver.conf.')
+    if os.getuid() > 0:
+        log.error('The personal config file is %s',
+                  os.path.join(cfgdir, 'tvserver.conf'))
+    sys.exit(0)
 
 # check and mark as running
 if kaa.utils.is_running('freevo-tvserver'):
@@ -105,103 +120,14 @@ if detach:
 
 kaa.utils.set_running('freevo-tvserver')
 
-# fork epg client.
-read_fd, write_fd = os.pipe()
-pid = os.fork()
+from freevo.tvserver.rpc import RPCServer
+logging.getLogger().setLevel(logging.DEBUG)
 
-if not pid:
-    # This is the epg server.
-
-    # logger setup
-    log = logging.getLogger()
-    log.setLevel(logging.INFO)
-
-    # remove handler, we want to set the look and avoid
-    # duplicate handlers
-    for l in log.handlers[:]:
-        log.removeHandler(l)
-
-    handler = logging.FileHandler('%s/tvepg-%s' % (freevo.conf.LOGDIR, os.getuid()))
-    handler.setFormatter(freevo.conf.formatter)
-    log.addHandler(handler)
-
-    # get logging object
-    log = logging.getLogger('record')
-
-    # set basic recording debug to info
-    log.setLevel(getattr(logging, config.loglevel))
-
-    try:
-        guide = kaa.epg.Server(str(config.epg.database))
-    except Exception, e:
-        log.exception('unable to start epg server')
-
-    # sync with tvserver
-    os.write(write_fd, '0')
-    os.close(read_fd)
-    os.close(write_fd)
-
-    # run epg server
-    kaa.main.run()
-
-    # print debug at the end
-    log.info('terminate epg')
-    sys.exit(0)
-
-
-
-# At this point we are the main tvserver
-
-# get logging object
-log = logging.getLogger('record')
-
-@kaa.coroutine()
-def start():
-    """
-    Start tvserver.
-    """
-    # import config. At this point we are conncted to the epg. This also means that
-    # the epg server already opened the config file and maybe wrote it.
-    from freevo.tvserver.config import config
-
-    # set basic recording debug to info
-    log.setLevel(getattr(logging, config.loglevel))
-
-    # import tvserver
-    from freevo.tvserver.server import TvServer
-
-    # start tvserver
-    server = TvServer()
-
-    # get mbus address for epg settings
-    mbus = freevo.ipc.Instance('tvserver')
-
-    auth = mbus.cfg.hashkey.strip()
-    host = mbus.addr['id'][mbus.addr['id'].find('@')+1:]
-    port = (yield epg.server.rpc('server.start', host + ':0', auth))[1]
-
-    # make epg information public
-    server.epgaddr = (host, port)
-
-
-# sync with epgserver
-os.close(write_fd)
-if not len(os.read(read_fd, 1)):
-    log.error('unable to start epg server')
-    sys.exit(1)
-os.close(read_fd)
-
-# connect to the epg at client side
-epg = kaa.epg.connect('epg')
-epg.signals['connected'].connect_once(start)
+# start tvserver
+log.setLevel(logging.DEBUG)
+server = RPCServer()
 
 kaa.main.run()
-
-# kill epg server
-try:
-    os.kill(pid, 15)
-except (OSError, IOError):
-    log.error('failed to terminate epg server')
 
 # print debug at the end
 log.error('terminate')

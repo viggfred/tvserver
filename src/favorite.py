@@ -22,7 +22,7 @@
 #
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2005-2007 Dirk Meyer, et al.
+# Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -86,8 +86,8 @@ class Favorite(object):
         self.once      = once
         self.substring = substring
         self.times     = times
-        self.start_padding = config.record.start_padding
-        self.stop_padding  = config.record.stop_padding
+        self.start_padding = config.recording.start_padding
+        self.stop_padding  = config.recording.stop_padding
 
         if not node:
             return
@@ -120,21 +120,6 @@ class Favorite(object):
                 self.stop_padding  = int(child.getattr('stop'))
             if child.name == 'priority':
                 setattr(self, 'priority', int(child.content))
-
-
-    def short_list(self):
-        """
-        Return a short list with informations about the favorite.
-        """
-        return self.id, self.name, self.priority
-
-
-    def long_list(self):
-        """
-        Return a long list with every information about the favorite.
-        """
-        return self.id, self.name, self.channels, self.priority, self.days, \
-               self.times, self.once, self.substring
 
 
     def match(self, name, channel, start):
@@ -233,7 +218,15 @@ class Favorite(object):
                (self.id, kaa.unicode_to_str(name), self.priority, once, substring)
 
 
-    def toxml(self, root):
+    def to_list(self):
+        """
+        Return a long list with every information about the favorite.
+        """
+        return self.id, self.name, self.channels, self.priority, self.days, \
+               self.times, self.once, self.substring
+
+
+    def to_xml(self, root):
         """
         Dump informations about the favorite in a fxd file node.
         """
