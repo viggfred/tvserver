@@ -52,7 +52,7 @@ from record_types import *
 from recording import Recording
 from favorite import Favorite
 import scheduler
-from epg import EPG
+import epg
 
 # get logging object
 log = logging.getLogger()
@@ -62,7 +62,7 @@ class Controller(object):
     Class for the tvserver.
     """
     def __init__(self):
-        self.epg = EPG()
+        epg.init()
         self.locked = False
         # file to load / save the recordings and favorites
         self.fxdfile = freevo.conf.datafile('tvschedule.fxd')
@@ -151,7 +151,7 @@ class Controller(object):
             kaa.OneShotTimer(self.check_epg).start(0.1)
             return
         self.locked = True
-        yield self.epg.check(self.recordings, self.favorites)
+        yield epg.check(self.recordings, self.favorites)
         self.locked = False
         self.reschedule()
 
