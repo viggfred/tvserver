@@ -45,6 +45,7 @@
 #
 # -----------------------------------------------------------------------------
 
+__all__ = [ 'Favorite' ]
 
 # python imports
 import re
@@ -56,11 +57,9 @@ import kaa
 
 # record imports
 from config import config
-from record_types import *
 
 # get logging object
 log = logging.getLogger('record')
-
 
 # internal regexp for time format
 _time_re = re.compile('([0-9]*):([0-9]*)-([0-9]*):([0-9]*)')
@@ -71,28 +70,28 @@ class Favorite(object):
     """
     NEXT_ID = 0
 
-    def __init__(self, name = 'unknown', channels = [],
-                 priority = 0, days = [], times = [], once = False,
-                 substring = False, node=None):
-        self.id        = Favorite.NEXT_ID
+    def __init__(self, name='unknown', channels=None, priority=0, days=None,
+                 times=None, once=False, substring=False, node=None):
+        self.id = Favorite.NEXT_ID
         Favorite.NEXT_ID += 1
-
-        self.name      = name
-        self.channels  = channels
-        self.priority  = priority
-        self.days      = days
-        self.url       = ''
-        self.fxdname   = ''
-        self.once      = once
+        self.name = name
+        self.channels = channels or []
+        self.priority = priority
+        self.days = days or []
+        self.url = ''
+        self.fxdname = ''
+        self.once = once
         self.substring = substring
-        self.times     = times
+        self.times = times or []
         self.start_padding = config.recording.start_padding
         self.stop_padding  = config.recording.stop_padding
+        if node:
+            self._add_xml_data(node)
 
-        if not node:
-            return
-
-        # Parse informations from a fxd node and set the internal variables.
+    def _add_xml_data(self, node):
+        """
+        Parse informations from a fxd node and set the internal variables.
+        """
         for child in node:
             for var in ('name', 'fxdname'):
                 if child.name == var:
@@ -121,7 +120,6 @@ class Favorite(object):
             if child.name == 'priority':
                 setattr(self, 'priority', int(child.content))
 
-
     def match(self, name, channel, start):
         """
         Return True if name, channel and start match this favorite.
@@ -144,8 +142,7 @@ class Favorite(object):
                 return True
         return False
 
-
-    def __fill_template(self, rec, text, is_url):
+    def _fill_template(self, rec, text, is_url):
         """
         Fill template like url and fxdname from the favorite to something
         specific for the recording.
@@ -171,31 +168,30 @@ class Favorite(object):
         text = text % options
         return text.rstrip(' -_:')
 
-
-    def add_data(self, rec):
+    def update_recording(self, rec):
         """
-        Add additional data from the favorite to the recording
+        Update recording based on data from the favorite
         """
-        rec.favorite      = True
+        rec.favorite = True
         rec.start_padding = self.start_padding
         rec.stop_padding  = self.stop_padding
-        rec.fxdname       = self.fxdname
+        rec.fxdname = self.fxdname
         if self.url:
             # add url template to recording
             try:
-                rec.url = kaa.unicode_to_str(self.__fill_template(rec, self.url, True) + '.suffix')
+                url = self._fill_template(rec, self.url, True)
+                rec.url = kaa.unicode_to_str(url) + '.suffix'
             except Exception, e:
                 log.exception('Error setting recording url')
                 rec.url = ''
         if self.fxdname:
             # add fxd name template to recording
             try:
-                rec.fxdname = self.__fill_template(rec, self.fxdname, False)
+                rec.fxdname = self._fill_template(rec, self.fxdname, False)
             except Exception, e:
                 log.exception('Error setting recording fxd name:')
                 rec.fxdname = ''
         return True
-
 
     def __str__(self):
         """
@@ -205,18 +201,12 @@ class Favorite(object):
         name = self.name
         if len(name) > 30:
             name = name[:30] + u'...'
-        name = u'"' + name + u'"'
-        if self.once:
-            once = '(schedule once)'
-        else:
-            once = ''
-        if self.substring:
-            substring = '(substring matching)'
-        else:
-            substring = '(exact matching)'
-        return '%3d %-35s %4d %s %s' % \
-               (self.id, kaa.unicode_to_str(name), self.priority, once, substring)
-
+        name = kaa.unicode_to_str(u'"' + name + u'"')
+        if self.once: once = '(schedule once)'
+        else: once = ''
+        if self.substring: substring = '(substring matching)'
+        else: substring = '(exact matching)'
+        return '%3d %-35s %4d %s %s' % (self.id, name, self.priority, once, substring)
 
     def to_list(self):
         """
@@ -224,7 +214,6 @@ class Favorite(object):
         """
         return self.id, self.name, self.channels, self.priority, self.days, \
                self.times, self.once, self.substring
-
 
     def to_xml(self, root):
         """
@@ -248,7 +237,6 @@ class Favorite(object):
         node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
         return node
 
-
     def __cmp__(self, obj):
         """
         Compare basic informations between Favorite objects
@@ -257,4 +245,3 @@ class Favorite(object):
             return True
         return self.name != obj.name or self.channels != obj.channels or \
                self.days != obj.days or self.times != obj.times
-

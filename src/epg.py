@@ -172,7 +172,7 @@ def check_favorite(fav, ctime, recordings):
             # also prevents from added a deleted favorite as active
             # again.
             continue
-        fav.add_data(rec)
+        fav.update_recording(rec)
         recordings.append(rec)
         log.info('added\n%s', rec)
         signals['changed'].emit(rec)
