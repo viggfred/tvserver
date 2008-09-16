@@ -51,17 +51,29 @@ from record_types import *
 # get logging object
 log = logging.getLogger('record')
 
-def _int2time(i):
+def _time_int2str(i):
     """
-    Helper function to create a time string from an int.
+    Helper function to create a time string from an int. The timestring
+    contains the timezone as integer, e.g. CEST == +0200. The input
+    time must be in UTC
     """
-    return time.strftime('%Y%m%d.%H:%M', time.localtime(i))
+    adjust = time.timezone
+    if time.daylight:
+        adjust = time.altzone
+    s = time.localtime(i - adjust)
+    if adjust < 0:
+        adjust = '+%04d' % (-adjust / 36)
+    else:
+        adjust = '-%04d' % (adjust / 36)
+    return time.strftime('%Y%m%d%H%M', s) + ' ' + adjust
 
-def _time2int(s):
+def _time_str2int(s):
     """
-    Helper function to create an int from a string created by _int2time
+    Helper function to create an int from a string created by _time_int2str.
+    The returned time in seconds is in UTC.
     """
-    return int(time.mktime(time.strptime(s, '%Y%m%d.%H:%M')))
+    sec = int(time.mktime(time.strptime(s.split()[0], '%Y%m%d%H%M')))
+    return sec - int(s.split()[1]) * 36
 
 
 class Recording(object):
@@ -125,8 +137,8 @@ class Recording(object):
                 self.start_padding = int(child.getattr('start'))
                 self.stop_padding  = int(child.getattr('stop'))
             if child.name == 'timer':
-                self.start = _time2int(child.getattr('start'))
-                self.stop  = _time2int(child.getattr('stop'))
+                self.start = _time_str2int(child.getattr('start'))
+                self.stop  = _time_str2int(child.getattr('stop'))
             if child.name == 'info':
                 for info in child.children:
                     self.info[info.name] = info.content
@@ -208,8 +220,8 @@ class Recording(object):
             channel = channel[:10]
         diff = (self.stop - self.start) / 60
         name = self.name
-        if len(name) > 23:
-            name = name[:20] + u'...'
+        if len(name) > 17:
+            name = name[:14] + u'...'
         name = u'"' + name + u'"'
         status = self.status
         if status == 'scheduled' and self.recorder:
@@ -222,11 +234,11 @@ class Recording(object):
             stop_padding = int(self.stop_padding/60)
         else:
             stop_padding = 0
-        return '%3d %10s %-25s %4d %s-%s %2s %2s %s' % \
+        return '%3d %10s %-19s %4d %s/%s-%s %2s %2s %s' % \
                (self.id, kaa.unicode_to_str(channel), kaa.unicode_to_str(name),
-                self.priority, _int2time(self.start)[4:],
-                _int2time(self.stop)[9:], start_padding,
-                stop_padding, kaa.unicode_to_str(status))
+                self.priority, _time_int2str(self.start)[4:8],
+                _time_int2str(self.start)[8:-6], _time_int2str(self.stop)[8:],
+                start_padding, stop_padding, kaa.unicode_to_str(status))
 
     def to_list(self):
         """
@@ -257,7 +269,8 @@ class Recording(object):
         if self.url:
             node.add_child('url', kaa.str_to_unicode(self.url))
 
-        node.add_child('timer', start=_int2time(self.start), stop=_int2time(self.stop))
+        node.add_child('timer', start=_time_int2str(self.start),
+                       stop=_time_int2str(self.stop))
         node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
 
         info = node.add_child('info')

@@ -80,7 +80,7 @@ def check(recordings, favorites):
 
     @note: this function modifies the given recordings and favorites list
     """
-    ctime = time.time() + 60 * 15
+    ctime = time.time() + 60 * 15 + time.timezone
     to_check = [ r for r in recordings if r.start - r.start_padding > ctime \
                  and r.status in (CONFLICT, SCHEDULED) ]
     # check recordings
@@ -90,7 +90,7 @@ def check(recordings, favorites):
             yield kaa.NotFinished
         # get one recording to check
         rec = to_check.pop(0)
-        check_recording(rec, ctime)
+        check_recording(rec)
     # check favorites
     to_check = favorites[:]
     while to_check:
@@ -99,10 +99,10 @@ def check(recordings, favorites):
             yield kaa.NotFinished
         # get favorite to check
         fav = to_check.pop(0)
-        check_favorite(fav, ctime, recordings)
+        check_favorite(fav, recordings)
 
 
-def check_recording(rec, ctime):
+def check_recording(rec):
     """
     Search epg for that recording. The recording should be at the
     same time, maybe it has moved +- 20 minutes. If the program
@@ -114,7 +114,7 @@ def check_recording(rec, ctime):
         log.error('unable to find %s in epg database', rec.channel)
         return
     # Try to find the exact title again.
-    results = kaa.epg.search(title=rec.name, channel=channel, time=interval)
+    results = kaa.epg.search(title=rec.name, channel=channel, time=interval, utc=True)
     for epginfo in results:
         # check all results
         if epginfo.start == rec.start and epginfo.stop == rec.stop:
@@ -144,7 +144,7 @@ def check_recording(rec, ctime):
             setattr(rec, attr, getattr(epginfo, attr))
 
 
-def check_favorite(fav, ctime, recordings):
+def check_favorite(fav, recordings):
     """
     Check the given favorite against the db and add recordings
     """
@@ -152,18 +152,21 @@ def check_favorite(fav, ctime, recordings):
     # some favorite titles when they have short names.
     if fav.substring:
         # unable to do that right now
-        listing = kaa.epg.search(keywords=fav.name)
+        listing = kaa.epg.search(keywords=fav.name, utc=False)
     else:
         # 'like' search
-        listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name))
+        listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name), utc=False)
     now = time.time()
+    # now and listing start and stop times are in localtime, not UTC. This makes
+    # it much easier to handle the time and date templates in Favorites.
     for p in listing:
         if not fav.match(p.title, p.channel.name, p.start):
             continue
         if p.stop < now:
             # do not add old stuff
             continue
-        rec = Recording(p.title, p.channel.name, fav.priority, p.start, p.stop,
+        # we found a new recording.
+        rec = Recording(p.title, p.channel.name, fav.priority, p.start_utc, p.stop_utc,
                         info={ "episode":p.episode,
                                "subtitle":p.subtitle,
                                "description":p.description } )

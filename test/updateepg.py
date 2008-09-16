@@ -22,7 +22,7 @@ def main():
     kaa.epg.connect('localhost:7601')
     c.connect(Events())
     if 0:
-        yield c.rpc('epg_update')
+        yield kaa.epg.update()
     if 0:
         print (yield c.rpc('recording_list'))
     if 0:
