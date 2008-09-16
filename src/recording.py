@@ -49,7 +49,7 @@ from config import config
 from record_types import *
 
 # get logging object
-log = logging.getLogger('record')
+log = logging.getLogger('tvserver')
 
 def _time_int2str(i):
     """

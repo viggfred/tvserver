@@ -68,7 +68,7 @@ import recorder
 from record_types import *
 
 # get logging object
-log = logging.getLogger('conflict')
+log = logging.getLogger('tvserver.conflict')
 
 class Device(object):
     def __init__(self, recorder=None):

@@ -59,7 +59,7 @@ import kaa
 from config import config
 
 # get logging object
-log = logging.getLogger('record')
+log = logging.getLogger('tvserver')
 
 # internal regexp for time format
 _time_re = re.compile('([0-9]*):([0-9]*)-([0-9]*):([0-9]*)')

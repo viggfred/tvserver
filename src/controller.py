@@ -55,7 +55,7 @@ import scheduler
 import epg
 
 # get logging object
-log = logging.getLogger()
+log = logging.getLogger('tvserver')
 
 class Controller(object):
     """

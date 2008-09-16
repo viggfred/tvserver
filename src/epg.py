@@ -47,7 +47,7 @@ from recording import Recording
 from config import config
 
 # get logging object
-log = logging.getLogger('record')
+log = logging.getLogger('tvserver')
 
 signals = {
     'changed': kaa.Signal(),

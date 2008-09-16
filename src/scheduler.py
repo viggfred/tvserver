@@ -41,7 +41,7 @@ from record_types import *
 import conflict
 
 # get logging object
-log = logging.getLogger('record')
+log = logging.getLogger('tvserver')
 
 @kaa.coroutine()
 def schedule(recordings):

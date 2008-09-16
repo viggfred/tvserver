@@ -43,7 +43,7 @@ from config import config
 from controller import Controller
 
 # get logging object
-log = logging.getLogger()
+log = logging.getLogger('tvserver')
 
 class RPCServer(Controller):
 
