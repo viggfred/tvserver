@@ -73,9 +73,9 @@ class Controller(object):
         recorder.signals['stop-recording'].connect(self._recorder_stop)
         recorder.signals['changed'].connect(self.reschedule)
         # start by checking the recordings/favorites
-        self.check_epg()
+        self.check_favorites_and_reschedule()
         # add schedule timer for SCHEDULE_TIMER / 3 seconds
-        kaa.Timer(self.check_epg).start(SCHEDULE_TIMER / 3)
+        kaa.Timer(self.check_favorites_and_reschedule).start(SCHEDULE_TIMER / 3)
 
     @kaa.timed(0.1, kaa.OneShotTimer, policy=kaa.POLICY_ONCE)
     def print_schedule(self):
@@ -142,13 +142,13 @@ class Controller(object):
         self.locked = False
 
     @kaa.coroutine()
-    def check_epg(self):
+    def check_favorites_and_reschedule(self):
         """
         Update recordings based on favorites and epg.
         """
         if self.locked:
             # system busy, call again later
-            kaa.OneShotTimer(self.check_epg).start(0.1)
+            kaa.OneShotTimer(self.check_favorites_and_reschedule).start(0.1)
             return
         self.locked = True
         yield epg.check(self.recordings, self.favorites)
@@ -313,7 +313,7 @@ class Controller(object):
         """
         updates favorites with data from the database
         """
-        return self.check_epg()
+        return self.check_favorites_and_reschedule()
 
     def favorite_add(self, name, channels, priority, days, times, once, substring):
         """
@@ -330,7 +330,7 @@ class Controller(object):
             r.id = next
             next += 1
         # update schedule
-        self.check_epg()
+        self.check_favorites_and_reschedule()
 
     def favorite_remove(self, id):
         """
@@ -364,4 +364,4 @@ class Controller(object):
             setattr(cp, key, value)
         self.favorites[self.favorites.index(r)] = cp
         # update schedule
-        self.check_epg()
+        self.check_favorites_and_reschedule()
