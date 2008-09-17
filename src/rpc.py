@@ -41,6 +41,7 @@ import kaa.epg
 # tvserver imports
 from config import config
 from controller import Controller
+from device import TVDevice, add_device, remove_device, get_devices
 
 # get logging object
 log = logging.getLogger('tvserver')
@@ -58,19 +59,32 @@ class RPCServer(Controller):
         ip, port = config.rpc.address.split(':')
         kaa.epg.listen('%s:%s' % (ip, int(port) + 1), config.rpc.password)
 
+    @kaa.coroutine()
     def client_connected(self, client):
         """
         Connect a new client to the server.
         """
         client.signals['closed'].connect(self.client_closed, client)
-        self._clients.append(client)
+        info = (yield client.rpc('identify'))
+        if info == 'client':
+            self._clients.append(client)
+        else:
+            add_device(RPCDevice(client, *info))
 
     def client_closed(self, client):
         """
         Callback when a client disconnects.
         """
         log.info('Client disconnected: %s', client)
-        self._clients.remove(client)
+        if client in self._clients:
+            self._clients.remove(client)
+        else:
+            for device in get_devices():
+                if device._rpc == client:
+                    remove_device(device)
+                    break
+            else:
+                log.error('unable to find device %s' % client)
 
     @kaa.coroutine()
     def reschedule(self):
@@ -182,3 +196,44 @@ class RPCServer(Controller):
         msg = [ f.to_list() for f in self.favorites ]
         for c in self._clients:
             c.rpc('favorite_update', *msg)
+
+
+class RPCDevice(TVDevice):
+
+    def __init__(self, rpcsocket, name, priority, multiplexes):
+        super(RPCDevice, self).__init__(name, priority, multiplexes)
+        self._rpc = rpcsocket
+
+    @kaa.coroutine(policy=kaa.POLICY_SYNCHRONIZED)
+    def check_recordings(self):
+        """
+        Check the internal list of recordings and add or remove them from
+        the recorder.
+        """
+        for remote in self.recordings[:]:
+            if remote.id is None and not remote.valid:
+                # remove it from the list, looks like the recording
+                # was already removed and not yet scheduled
+                self.recordings.remove(remote)
+                continue
+            if remote.id is None:
+                # add the recording
+                remote.id = (yield self._rpc.schedule(
+                    remote.channel, remote.start, remote.stop, remote.filename))
+                continue
+            if not remote.valid:
+                # remove the recording
+                self.recordings.remove(remote)
+                yield self._rpc.remove(remote.id)
+
+    @kaa.rpc.expose()
+    def started(self, id):
+        for remote in self.recordings[:]:
+            if remote.id == id:
+                remote.started()
+
+    @kaa.rpc.expose()
+    def stopped(self, id):
+        for remote in self.recordings[:]:
+            if remote.id == id:
+                remote.stopped()

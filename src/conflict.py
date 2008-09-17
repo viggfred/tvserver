@@ -64,7 +64,7 @@ import time
 import kaa
 
 # record imports
-import recorder
+from device import get_devices
 from record_types import *
 
 # get logging object
@@ -80,7 +80,7 @@ class Device(object):
         if recorder:
             self.recorder = recorder
             self.rating   = recorder.rating
-            self.listing  = recorder.current_bouquets
+            self.listing  = recorder.current_multiplexes
             for l in self.listing:
                 self.all_channels += l
 
@@ -138,7 +138,7 @@ def resolve(recordings, schedule):
     """
     log.info('start conflict resolving')
     devices = [ Device() ]
-    for p in recorder.get_recorder():
+    for p in get_devices():
         devices.append(Device(p))
     devices.sort(lambda l, o: cmp(o.rating,l.rating))
     # Sort by start time
@@ -149,8 +149,6 @@ def resolve(recordings, schedule):
     conflicts = []
     # recordings already scanned
     scanned = []
-    # get current time
-    ctime = time.time()
     # Check all recordings in the list for conflicts
     for r in recordings:
         if r in scanned:

@@ -143,9 +143,9 @@ class Recording(object):
                 for info in child.children:
                     self.info[info.name] = info.content
 
-    def schedule(self, recorder):
+    def schedule(self, device):
         """
-        Schedule the recording on the given recorder
+        Schedule the recording on the given device
         """
         start = self.start
         if self.respect_start_padding:
@@ -153,7 +153,7 @@ class Recording(object):
         stop = self.stop
         if self.respect_stop_padding:
             stop += self.stop_padding
-        if self._scheduled_recorder == recorder and \
+        if self._scheduled_recorder == device and \
                self._scheduled_start == start and \
                (self._scheduled_stop == stop or \
                 self.status == RECORDING):
@@ -161,11 +161,11 @@ class Recording(object):
             return
         if self._scheduled_recorder:
             self._scheduled_recorder.remove(self)
-        self._scheduled_recorder = recorder
+        self._scheduled_recorder = device
         self._scheduled_start = start
         self._scheduled_stop = stop
-        log.info('schedule %s on %s' % (self.name, recorder))
-        recorder.record(self, start, stop)
+        log.info('schedule %s on %s' % (self.name, device))
+        device.record(self, start, stop)
 
     def remove(self):
         """
@@ -225,7 +225,7 @@ class Recording(object):
         name = u'"' + name + u'"'
         status = self.status
         if status == 'scheduled' and self.recorder:
-            status = self.recorder.device
+            status = self.recorder.name
         if self.respect_start_padding:
             start_padding = int(self.start_padding/60)
         else:

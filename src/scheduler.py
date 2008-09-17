@@ -36,7 +36,7 @@ import logging
 import kaa
 
 # record imports
-import recorder
+from device import get_device
 from record_types import *
 import conflict
 
@@ -47,6 +47,7 @@ log = logging.getLogger('tvserver')
 def schedule(recordings):
     # get current time
     ctime = time.time()
+    all_recordings = recordings
     # create a new list of recordings based on the status
     recordings = [ r for r in recordings if r.status in \
                    (CONFLICT, SCHEDULED, RECORDING) ]
@@ -67,7 +68,7 @@ def schedule(recordings):
             schedule[r.id] = [ r.status, r.recorder, r.respect_start_padding, \
                                r.respect_stop_padding ]
         else:
-            device = recorder.get_recorder(r.channel)
+            device = get_device(r.channel)
             if device:
                 # set to the best recorder for each recording
                 schedule[r.id] = [ SCHEDULED, device, True, True ]
@@ -79,7 +80,7 @@ def schedule(recordings):
     # recordings is a list fo current running or future recordings
     # detect possible conflicts (delayed to avoid blocking the main loop)
     schedule = yield conflict.resolve(recordings, schedule)
-    for r in recordings:
+    for r in all_recordings:
         if r.id in schedule:
             r.status, r.recorder, r.respect_start_padding, \
                       r.respect_stop_padding = schedule[r.id]

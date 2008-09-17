@@ -47,7 +47,7 @@ import freevo.fxdparser
 
 # tvserver imports
 from config import config
-import recorder
+import device
 from record_types import *
 from recording import Recording
 from favorite import Favorite
@@ -69,9 +69,9 @@ class Controller(object):
         # load the recordings file
         self.load_fxd()
         # connect to recorder signals
-        recorder.signals['start-recording'].connect(self._recorder_start)
-        recorder.signals['stop-recording'].connect(self._recorder_stop)
-        recorder.signals['changed'].connect(self.reschedule)
+        device.signals['start-recording'].connect(self._recorder_start)
+        device.signals['stop-recording'].connect(self._recorder_stop)
+        device.signals['changed'].connect(self.reschedule)
         # start by checking the recordings/favorites
         self.check_favorites_and_reschedule()
         # add schedule timer for SCHEDULE_TIMER / 3 seconds

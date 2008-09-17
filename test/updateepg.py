@@ -12,27 +12,30 @@ class Events(object):
             print r
 
     @kaa.rpc.expose()
+    def identify(self):
+        return 'client'
+    
+    @kaa.rpc.expose()
     def favorite_update(self, *fav):
         for f in fav:
             print f
 
 @kaa.coroutine()
 def main():
-    c = kaa.rpc.Client('localhost:7600')
-    kaa.epg.connect('localhost:7601')
+    c = kaa.rpc.Client('192.168.2.2:7600')
     c.connect(Events())
+    kaa.epg.connect('192.168.2.2:7601')
     if 0:
         yield kaa.epg.update()
-    if 0:
+        yield c.rpc('favorite_update')
+    if 1:
         print (yield c.rpc('recording_list'))
     if 0:
         yield c.rpc('recording_add', 'Tagesschau', 'Das Erste', 10,
                     int(time.time())+10000, time.time()+10200)
     if 0:
         yield c.rpc('recording_remove', 2)
-    if 0:
-        print (yield c.rpc('favorite_update'))
-    if 0:
+    if 1:
         print (yield c.rpc('favorite_list'))
     if 0:
         print (yield c.rpc('favorite_add', u'Tagesschau', [ 'Das Erste' ],
