@@ -130,11 +130,12 @@ class TVDevice(object):
     TV Device
     """
 
-    def __init__(self, name, priority, multiplexes):
+    def __init__(self, name, priority, multiplexes, capabilities):
         self.name = name
         self.multiplexes = multiplexes
         self.rating = priority
         self.recordings = []
+        self.capabilities = capabilities
 
     def _normalize_name(self, name):
         return kaa.unicode_to_str(name.replace('.', '').replace(' ', '')).upper().strip()

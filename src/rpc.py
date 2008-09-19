@@ -200,8 +200,8 @@ class RPCServer(Controller):
 
 class RPCDevice(TVDevice):
 
-    def __init__(self, rpcsocket, name, priority, multiplexes):
-        super(RPCDevice, self).__init__(name, priority, multiplexes)
+    def __init__(self, rpcsocket, name, priority, multiplexes, capabilities):
+        super(RPCDevice, self).__init__(name, priority, multiplexes, capabilities)
         rpcsocket.connect(self)
         self._rpc = rpcsocket
         self.rpc = rpcsocket.rpc

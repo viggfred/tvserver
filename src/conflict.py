@@ -114,8 +114,8 @@ class Device(object):
         # time, it is no conflict. (ignoring padding here for once)
         # If the conflict is only based on the padding, add it to conflict_padding
         for r in self.rec:
-            if r.channel in bouquet:
-                # same bouquet, will always work
+            if r.channel in bouquet and 'multiple' in self.recorder.capabilities:
+                # same bouquet and multiple recordings possible
                 continue
             if r.stop > recording.start:
                 # overlapping time, won't work
