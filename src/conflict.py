@@ -65,22 +65,22 @@ import kaa
 
 # record imports
 from device import get_devices
-from record_types import *
+from recording import SCHEDULED, RECORDING, CONFLICT
 
 # get logging object
 log = logging.getLogger('tvserver.conflict')
 
-class Device(object):
-    def __init__(self, recorder=None):
-        self.recorder     = None
-        self.rating       = 0
-        self.listing      = []
+class DeviceSchedule(object):
+    def __init__(self, device=None):
+        self.device = None
+        self.rating = 0
+        self.listing = []
         self.all_channels = []
-        self.rec          = []
-        if recorder:
-            self.recorder = recorder
-            self.rating   = recorder.rating
-            self.listing  = recorder.current_multiplexes
+        self.rec = []
+        if device:
+            self.device = device
+            self.rating = device.rating
+            self.listing = device.current_multiplexes
             for l in self.listing:
                 self.all_channels += l
 
@@ -89,15 +89,15 @@ class Device(object):
         Append recording to list of possible and return True. If not possible,
         do not append and return False.
         """
-        if not self.recorder:
-            # dummy recorder, it is always possible not record it
+        if not self.device:
+            # dummy device, it is always possible not record it
             self.rec.append(recording)
             return True
         recording.conflict_padding = []
         # Set status to False if the recording is currently recording
         # but not on this device.
         if recording.status == RECORDING and \
-               recording.recorder != self.recorder:
+               recording.device != self.device:
             return False
         if not recording.channel in self.all_channels:
             # channel not supported
@@ -114,7 +114,7 @@ class Device(object):
         # time, it is no conflict. (ignoring padding here for once)
         # If the conflict is only based on the padding, add it to conflict_padding
         for r in self.rec:
-            if r.channel in bouquet and 'multiple' in self.recorder.capabilities:
+            if r.channel in bouquet and 'multiple' in self.device.capabilities:
                 # same bouquet and multiple recordings possible
                 continue
             if r.stop > recording.start:
@@ -137,9 +137,9 @@ def resolve(recordings, schedule):
     with overlapping times.
     """
     log.info('start conflict resolving')
-    devices = [ Device() ]
+    devices = [ DeviceSchedule() ]
     for p in get_devices():
-        devices.append(Device(p))
+        devices.append(DeviceSchedule(p))
     devices.sort(lambda l, o: cmp(o.rating,l.rating))
     # Sort by start time
     recordings = recordings[:]
@@ -219,7 +219,7 @@ def check_recursive(devices, fixed, to_check, best_rating, schedule, dropped=1):
 def rate_conflict_and_return_best(devices, best_rating, schedule):
     """
     Rate device/recording settings. If the rating is better then best_rating,
-    store the choosen recorder in the recording item.
+    store the choosen device in the recording item.
     """
     rating = 0
     for d in devices[:-1]:
@@ -234,7 +234,7 @@ def rate_conflict_and_return_best(devices, best_rating, schedule):
             for r in d.rec:
                 if r.status == RECORDING:
                     continue
-                schedule[r.id] = [ SCHEDULED, d.recorder, True, True ]
+                schedule[r.id] = [ SCHEDULED, d.device, True, True ]
                 if r.conflict_padding:
                     # the start_padding conflicts with the stop paddings
                     # the recordings in r.conflict_padding. Fix it by

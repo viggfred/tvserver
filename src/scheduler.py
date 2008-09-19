@@ -33,12 +33,13 @@
 import time
 import logging
 
+# kaa imports
 import kaa
 from kaa.utils import utctime
 
 # record imports
 from device import get_device
-from record_types import *
+from recording import SCHEDULED, RECORDING, CONFLICT, MISSED
 import conflict
 
 # get logging object
@@ -53,7 +54,7 @@ def schedule(recordings):
     recordings = [ r for r in recordings if r.status in \
                    (CONFLICT, SCHEDULED, RECORDING) ]
     # new dict for schedule information. Each entry is r.status,
-    # r.recorder, r.respect_start_padding, r.respect_stop_padding
+    # r.device, r.respect_start_padding, r.respect_stop_padding
     schedule = {}
     # sort by start time
     recordings.sort(lambda l, o: cmp(l.start,o.start))
@@ -66,15 +67,15 @@ def schedule(recordings):
             recordings.remove(r)
         elif r.status == RECORDING:
             # mark current running recordings
-            schedule[r.id] = [ r.status, r.recorder, r.respect_start_padding, \
+            schedule[r.id] = [ r.status, r.device, r.respect_start_padding, \
                                r.respect_stop_padding ]
         else:
             device = get_device(r.channel)
             if device:
-                # set to the best recorder for each recording
+                # set to the best device for each recording
                 schedule[r.id] = [ SCHEDULED, device, True, True ]
             else:
-                # no recorder found, remove from the list
+                # no device found, remove from the list
                 schedule[r.id] = [ CONFLICT, None, True, True ]
                 recordings.remove(r)
 
@@ -83,5 +84,5 @@ def schedule(recordings):
     schedule = yield conflict.resolve(recordings, schedule)
     for r in all_recordings:
         if r.id in schedule:
-            r.status, r.recorder, r.respect_start_padding, \
+            r.status, r.device, r.respect_start_padding, \
                       r.respect_stop_padding = schedule[r.id]

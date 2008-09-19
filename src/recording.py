@@ -29,7 +29,8 @@
 #
 # -----------------------------------------------------------------------------
 
-__all__ = [ 'Recording' ]
+__all__ = [ 'Recording', 'MISSED', 'SAVED', 'SCHEDULED', 'RECORDING', 'CONFLICT'
+            'DELETED', 'FAILED' ]
 
 # python imports
 import time
@@ -48,10 +49,18 @@ import freevo.fxdparser
 
 # record imports
 from config import config
-from record_types import *
 
 # get logging object
 log = logging.getLogger('tvserver')
+
+# status values
+MISSED = 'missed'
+SAVED = 'saved'
+SCHEDULED = 'scheduled'
+RECORDING = 'recording'
+CONFLICT = 'conflict'
+DELETED = 'deleted'
+FAILED = 'failed'
 
 def _time_int2str(i):
     """
@@ -114,10 +123,10 @@ class Recording(object):
                 setattr(self, key, int(value))
             elif value:
                 self.info[key] = kaa.str_to_unicode(value)
-        # recorder where the tvserver wants to schedule the recording
-        self.recorder = None
-        # external recorder where the recording is currently scheduled
-        self._scheduled_recorder = None
+        # device where the tvserver wants to schedule the recording
+        self.device = None
+        # device where the recording is currently scheduled
+        self._scheduled_device = None
         if node:
             self._add_xml_data(node)
 
@@ -168,9 +177,9 @@ class Recording(object):
     def url(self, url):
         self.__url = url
 
-    def schedule(self, device):
+    def schedule(self):
         """
-        Schedule the recording on the given device
+        Schedule the recording
         """
         start = self.start
         if self.respect_start_padding:
@@ -178,27 +187,27 @@ class Recording(object):
         stop = self.stop
         if self.respect_stop_padding:
             stop += self.stop_padding
-        if self._scheduled_recorder == device and \
+        if self._scheduled_device == self.device and \
                self._scheduled_start == start and \
                (self._scheduled_stop == stop or \
                 self.status == RECORDING):
             # no update
             return
-        if self._scheduled_recorder:
-            self._scheduled_recorder.remove(self)
-        self._scheduled_recorder = device
+        if self._scheduled_device:
+            self._scheduled_device.remove(self)
+        self._scheduled_device = self.device
         self._scheduled_start = start
         self._scheduled_stop = stop
-        log.info('schedule %s on %s' % (self.name, device))
-        device.add_recording(self, start, stop)
+        log.info('schedule %s on %s' % (self.name, self.device))
+        self.device.schedule(self, start, stop)
 
     def remove(self):
         """
-        Remove from scheduled recorder.
+        Remove from scheduled device.
         """
-        if self._scheduled_recorder:
-            self._scheduled_recorder.remove_recording(self)
-        self._scheduled_recorder = None
+        if self._scheduled_device:
+            self._scheduled_device.remove(self)
+        self._scheduled_device = None
 
     def create_fxd(self):
         """
@@ -233,7 +242,7 @@ class Recording(object):
         # and save file
         tmp = kaa.tempfile('fxd', True)
         fxd.save(tmp)
-        self._scheduled_recorder.create_fxd(self.url + '.fxd', open(tmp).read())
+        self._scheduled_device.create_fxd(self.url + '.fxd', open(tmp).read())
         os.unlink(tmp)
 
     def __str__(self):
@@ -250,8 +259,8 @@ class Recording(object):
             name = name[:14] + u'...'
         name = u'"' + name + u'"'
         status = self.status
-        if status == 'scheduled' and self.recorder:
-            status = self.recorder.name
+        if status == 'scheduled' and self.device:
+            status = self.device.name
         if self.respect_start_padding:
             start_padding = int(self.start_padding/60)
         else:

@@ -49,14 +49,18 @@ import freevo.fxdparser
 # tvserver imports
 from config import config
 import device
-from record_types import *
-from recording import Recording
+from recording import Recording, MISSED, SAVED, SCHEDULED, RECORDING, CONFLICT, \
+     DELETED, FAILED
 from favorite import Favorite
 import scheduler
 import epg
 
 # get logging object
 log = logging.getLogger('tvserver')
+
+# Time when to schedule the recording on a recorder
+# (only next hour, update every 30 minutes)
+SCHEDULE_TIMER = 60 * 60
 
 class Controller(object):
     """
@@ -117,29 +121,22 @@ class Controller(object):
             kaa.OneShotTimer(self.reschedule).start(0.1)
             yield True
         self.locked = True
-        yield scheduler.schedule(self.recordings)
-        # save fxd file
-        self.save_schedule()
-        # print some debug
-        self.print_schedule()
-        # Schedule recordings on recorder for the next SCHEDULE_TIMER seconds.
-        log.info('schedule recordings')
-        # sort by start time
-        self.recordings.sort(lambda l, o: cmp(l.start,o.start))
         # get current time
         ctime = utctime()
         # remove old recorderings
         self.recordings = filter(lambda r: r.start > ctime - 60*60*24*7, self.recordings)
-        # schedule current (== now + SCHEDULE_TIMER) recordings
+        # run the scheduler to attach devices to recordings
+        yield scheduler.schedule(self.recordings)
+        # sort by start time
+        self.recordings.sort(lambda l, o: cmp(l.start,o.start))
+        # save fxd file
+        self.save_schedule()
+        self.print_schedule()
+        # Schedule recordings on recorder for the next SCHEDULE_TIMER seconds.
+        log.info('schedule recordings')
         for r in self.recordings:
-            if r.start > ctime + SCHEDULE_TIMER:
-                # do not schedule to much in the future
-                break
-            if r.status == SCHEDULED:
-                r.schedule(r.recorder)
-            if r.status in (DELETED, CONFLICT):
-                r.remove()
-        # unlock system
+            if r.start < ctime + SCHEDULE_TIMER and r.status == SCHEDULED:
+                r.schedule()
         self.locked = False
 
     @kaa.coroutine()

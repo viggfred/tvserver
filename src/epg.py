@@ -43,8 +43,7 @@ import kaa.epg
 from kaa.utils import localtime2utc, utctime
 
 # record imports
-from record_types import *
-from recording import Recording
+from recording import Recording, SCHEDULED, CONFLICT
 from config import config
 
 # get logging object

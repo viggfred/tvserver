@@ -206,8 +206,18 @@ class RPCDevice(TVDevice):
         self._rpc = rpcsocket
         self.rpc = rpcsocket.rpc
 
+    def schedule(self, recording, start, stop):
+        super(RPCDevice, self).schedule(recording, start, stop)
+        # update recordings at the remote application
+        self.sync()
+
+    def remove(self, recording):
+        super(RPCDevice, self).remove(recording)
+        # update recordings at the remote application
+        self.sync()
+        
     @kaa.coroutine(policy=kaa.POLICY_SYNCHRONIZED)
-    def check_recordings(self):
+    def sync(self):
         """
         Check the internal list of recordings and add or remove them from
         the recorder.

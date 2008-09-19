@@ -29,13 +29,11 @@
 #
 # -----------------------------------------------------------------------------
 
-__all__ = [ 'signals', 'connect', 'get_device', 'add_device', 'remove_device' ]
+__all__ = [ 'signals', 'get_device', 'add_device', 'remove_device', 'TVDevice' ]
 
 # python imports
 import os
 import sys
-import time
-import string
 import logging
 
 # kaa imports
@@ -45,7 +43,6 @@ from kaa.utils import property, utc2localtime
 
 # record imports
 from config import config
-from record_types import *
 
 # get logging object
 log = logging.getLogger('tvserver')
@@ -56,59 +53,40 @@ signals = { 'changed': kaa.Signal(),
             'stop-recording': kaa.Signal()
           }
 
+_devices = []
+_channel = {}
+
 def get_device(channel):
-    return _devices.best.get(channel)
+    return _channel.get(channel)
 
 def get_devices():
     return _devices
 
 def add_device(device):
     _devices.append(device)
+    _rebuild_channels_dict()
+    signals['changed'].emit()
 
 def remove_device(device):
     _devices.remove(device)
+    _rebuild_channels_dict()
+    signals['changed'].emit()
+
+def _rebuild_channels_dict():
+    global _channel
+    _channel = {}
+    for device in _devices:
+        for multiplex in device.multiplexes:
+            for channel in multiplex:
+                if not channel in _channel:
+                    _channel[channel] = device
+                elif _channel[channel].rating < device.rating:
+                    _channel[channel] = device
 
 
-# ****************************************************************************
-# Internals
-# ****************************************************************************
-
-class Devices(list):
-    def __init__(self):
-        super(Devices, self).__init__()
-        self.best = {}
-
-    def append(self, device):
-        super(Devices, self).append(device)
-        self.check()
-
-    def remove(self, device):
-        super(Devices, self).remove(device)
-        self.check()
-
-    def check(self):
-        """
-        Check all possible recorders.
-        """
-        # reset best recorder list
-        self.best = {}
-        for device in self:
-            for multiplex in device.multiplexes:
-                for channel in multiplex:
-                    if not channel in self.best:
-                        self.best[channel] = device
-                        continue
-                    if self.best[channel].rating < device.rating:
-                        self.best[channel] = device
-        signals['changed'].emit()
-
-# global Devices object
-_devices = Devices()
-
-class RemoteRecording(object):
+class RecordingWrapper(object):
     """
-    Wrapper for recordings to add 'id' and 'valid' for internal use inside
-    the recorder.
+    Wrapper for recordings to add some information from the device
     """
     def __init__(self, recording, channel, start, stop):
         self.recording = recording
@@ -125,11 +103,11 @@ class RemoteRecording(object):
     def stopped(self):
         signals['stop-recording'].emit(self.recording)
 
+
 class TVDevice(object):
     """
     TV Device
     """
-
     def __init__(self, name, priority, multiplexes, capabilities):
         self.name = name
         self.multiplexes = multiplexes
@@ -183,31 +161,24 @@ class TVDevice(object):
     def current_multiplexes(self):
         return self.__multiplexes
 
-    def add_recording(self, recording, start, stop):
+    def schedule(self, recording, start, stop):
         """
         Add a recording.
         """
         channel = self.channel_mapping[recording.channel]
-        remote = RemoteRecording(recording, channel, start, stop)
-        self.recordings.append(remote)
-        # update recordings at the remote application
-        self.check_recordings()
+        wrapper = RecordingWrapper(recording, channel, start, stop)
+        self.recordings.append(wrapper)
 
-    def remove_recording(self, recording):
+    def remove(self, recording):
         """
         Remove a recording
         """
-        for remote in self.recordings:
-            if remote.recording == recording:
-                remote.valid = False
-        # update recordings at the remote application
-        self.check_recordings()
+        for wrapper in self.recordings:
+            if wrapper.recording == recording:
+                wrapper.valid = False
+
+    def create_fxd(self, filename, content):
+        pass
 
     def __repr__(self):
         return '<TVDevice %s>' % (self.name)
-
-    def check_recordings(self):
-        raise NotImplemented
-
-    def create_fxd(self, filename, content):
-        raise NotImplemented
