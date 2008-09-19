@@ -123,6 +123,7 @@ class Favorite(object):
     def match(self, name, channel, start):
         """
         Return True if name, channel and start match this favorite.
+        @note: start time is local time and not UTC
         """
         if kaa.str_to_unicode(name.lower()) != self.name.lower() and not self.substring:
             return False
@@ -180,10 +181,9 @@ class Favorite(object):
             # add url template to recording
             try:
                 url = self._fill_template(rec, self.url, True)
-                rec.url = kaa.unicode_to_str(url) + '.suffix'
+                rec.url = kaa.unicode_to_str(url)
             except Exception, e:
                 log.exception('Error setting recording url')
-                rec.url = ''
         if self.fxdname:
             # add fxd name template to recording
             try:

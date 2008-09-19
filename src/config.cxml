@@ -7,11 +7,6 @@
                 Default filemask for recordings
             </desc>
         </var>
-        <var name="directory" type="str">
-            <desc lang="en">
-                Directory where to store recordings
-            </desc>
-        </var>
         <var name="start_padding" default="60">
             <desc lang="en">
                 Try to start all recordings before their time with the given padding

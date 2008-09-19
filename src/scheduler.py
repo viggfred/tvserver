@@ -34,6 +34,7 @@ import time
 import logging
 
 import kaa
+from kaa.utils import utctime
 
 # record imports
 from device import get_device
@@ -45,8 +46,8 @@ log = logging.getLogger('tvserver')
 
 @kaa.coroutine()
 def schedule(recordings):
-    # get current time
-    ctime = time.time()
+    # get current time in UTC
+    ctime = utctime()
     all_recordings = recordings
     # create a new list of recordings based on the status
     recordings = [ r for r in recordings if r.status in \

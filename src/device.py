@@ -41,7 +41,7 @@ import logging
 # kaa imports
 import kaa
 import kaa.epg
-from kaa.utils import property
+from kaa.utils import property, utc2localtime
 
 # record imports
 from config import config
@@ -117,38 +117,7 @@ class RemoteRecording(object):
         self.stop = stop
         self.id = None
         self.valid = True
-
-    @property
-    def filename(self):
-        """
-        Return url (e.g. filename) for the given recording
-        """
-        rec = self.recording
-        if not rec.url:
-            filename_array = { 'progname': kaa.unicode_to_str(rec.name),
-                               'title'   : kaa.unicode_to_str(rec.subtitle) }
-            filemask = config.record.filemask % filename_array
-            filename = ''
-            for letter in time.strftime(filemask, time.localtime(rec.start)):
-                if letter in string.ascii_letters + string.digits:
-                    filename += letter
-                elif filename and filename[-1] != '_':
-                    filename += '_'
-            filename = filename.rstrip(' -_:') + '.mpg'
-            filename = 'file:' + os.path.join(config.record.dir, filename)
-        else:
-            # check filename
-            if rec.url.startswith('file:'):
-                filename = os.path.join(config.record.dir, rec.url[5:])
-                if filename.endswith('.suffix'):
-                    filename = os.path.splitext(filename)[0] + '.mpg'
-                filename = 'file:' + filename
-        if filename.startswith('file:'):
-            # check if target dir exists
-            d = os.path.dirname(filename[5:])
-            if not os.path.isdir(d):
-                os.makedirs(d)
-        return filename
+        self.url = recording.url
 
     def started(self):
         signals['start-recording'].emit(self.recording)
@@ -218,7 +187,8 @@ class TVDevice(object):
         Add a recording.
         """
         channel = self.channel_mapping[recording.channel]
-        self.recordings.append(RemoteRecording(recording, channel, start, stop))
+        remote = RemoteRecording(recording, channel, start, stop)
+        self.recordings.append(remote)
         # update recordings at the remote application
         self.check_recordings()
 
@@ -236,4 +206,7 @@ class TVDevice(object):
         return '<TVDevice %s>' % (self.name)
 
     def check_recordings(self):
+        raise NotImplemented
+
+    def create_fxd(self, filename, content):
         raise NotImplemented

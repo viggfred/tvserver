@@ -202,7 +202,9 @@ class RPCDevice(TVDevice):
 
     def __init__(self, rpcsocket, name, priority, multiplexes):
         super(RPCDevice, self).__init__(name, priority, multiplexes)
+        rpcsocket.connect(self)
         self._rpc = rpcsocket
+        self.rpc = rpcsocket.rpc
 
     @kaa.coroutine(policy=kaa.POLICY_SYNCHRONIZED)
     def check_recordings(self):
@@ -218,13 +220,16 @@ class RPCDevice(TVDevice):
                 continue
             if remote.id is None:
                 # add the recording
-                remote.id = (yield self._rpc.schedule(
-                    remote.channel, remote.start, remote.stop, remote.filename))
+                remote.id = (yield self.rpc('schedule',
+                    remote.channel, remote.start, remote.stop, remote.url))
                 continue
             if not remote.valid:
                 # remove the recording
                 self.recordings.remove(remote)
-                yield self._rpc.remove(remote.id)
+                yield self.rpc('remove', remote.id)
+
+    def create_fxd(self, filename, content):
+        return self.rpc('create_fxd', filename, content)
 
     @kaa.rpc.expose()
     def started(self, id):

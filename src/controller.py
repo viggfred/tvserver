@@ -40,6 +40,7 @@ import logging
 
 # kaa imports
 import kaa
+from kaa.utils import localtime2utc, utctime
 
 # freevo imports
 import freevo.conf
@@ -67,7 +68,7 @@ class Controller(object):
         # file to load / save the recordings and favorites
         self.fxdfile = freevo.conf.datafile('tvschedule.fxd')
         # load the recordings file
-        self.load_fxd()
+        self.load_schedule()
         # connect to recorder signals
         device.signals['start-recording'].connect(self._recorder_start)
         device.signals['stop-recording'].connect(self._recorder_stop)
@@ -95,7 +96,7 @@ class Controller(object):
             # mark that all are printed once
             self.only_print_current = True
         # print only from the last 24 hours
-        maxtime = time.time() - 60 * 60 * 24
+        maxtime = utctime() - 60 * 60 * 24
         info = 'recordings:\n'
         for r in self.recordings:
             if all or r.stop > maxtime:
@@ -118,7 +119,7 @@ class Controller(object):
         self.locked = True
         yield scheduler.schedule(self.recordings)
         # save fxd file
-        self.save_fxd()
+        self.save_schedule()
         # print some debug
         self.print_schedule()
         # Schedule recordings on recorder for the next SCHEDULE_TIMER seconds.
@@ -126,7 +127,7 @@ class Controller(object):
         # sort by start time
         self.recordings.sort(lambda l, o: cmp(l.start,o.start))
         # get current time
-        ctime = time.time()
+        ctime = utctime()
         # remove old recorderings
         self.recordings = filter(lambda r: r.start > ctime - 60*60*24*7, self.recordings)
         # schedule current (== now + SCHEDULE_TIMER) recordings
@@ -159,7 +160,7 @@ class Controller(object):
     # load / save fxd file with recordings and favorites
     #
 
-    def load_fxd(self):
+    def load_schedule(self):
         """
         load the fxd file
         """
@@ -198,7 +199,7 @@ class Controller(object):
                 self.favorites.append(f)
 
     @kaa.timed(1, kaa.OneShotTimer, policy=kaa.POLICY_RESTART)
-    def save_fxd(self):
+    def save_schedule(self):
         """
         save the fxd file
         """
@@ -218,36 +219,26 @@ class Controller(object):
         log.info('recording started')
         recording.status = RECORDING
         # save fxd file
-        self.save_fxd()
+        self.save_schedule()
         # create fxd file
         recording.create_fxd()
         # print some debug
         self.print_schedule()
 
-    def _recorder_stop(self, recording):
+    def _recorder_stop(self, recording, success=True):
         log.info('recording stopped')
-        if recording.url.startswith('file:'):
-            filename = recording.url[5:]
-            if os.path.isfile(filename):
-                recording.status = SAVED
-            else:
-                log.info('failed: file not found %s' % recording.url)
-                recording.status = FAILED
-                # Without a recording file, the fxd file is useless
-                fxdfile = os.path.splitext(filename)[0] + '.fxd'
-                if os.path.isfile(fxdfile):
-                    # fxd file must be in real not in overlay dir, without
-                    # that, the recorder couldn't even store the file
-                    os.unlink(fxdfile)
-        else:
-            recording.status = SAVED
-        if recording.status == SAVED and time.time() + 100 < recording.stop:
+        if not success:
+            # FIXME: delete fxd file
+            recording.status = FAILED
+        elif utctime() + 100 < recording.stop:
             # something went wrong
             log.info('failed: stopped %s secs to early' % \
-                     (recording.stop - time.time()))
+                     (recording.stop - utctime()))
             recording.status = FAILED
+        else:
+            recording.status = SAVED
         # save fxd file
-        self.save_fxd()
+        self.save_schedule()
         # print some debug
         self.print_schedule()
 
@@ -270,6 +261,10 @@ class Controller(object):
         self.recordings.append(r)
         self.reschedule()
         return r
+
+    #
+    # API
+    #
 
     def recording_remove(self, id):
         """

@@ -5,6 +5,7 @@ import functools
 import kaa
 import kaa.rpc
 import kaa.epg
+from kaa.utils import localtime2utc
 
 class TVServer(object):
 
@@ -40,11 +41,11 @@ def main():
     if 0:
         yield kaa.epg.update()
         yield server.favorite_update()
-    if 1:
-        print (yield server.recording_list())
     if 0:
-        yield server.recording_add('Tagesschau', 'Das Erste', 10,
-                    int(time.time())+10000, time.time()+10200)
+        print (yield server.recording_list())
+    if 1:
+        t = int(localtime2utc(time.time()))
+        yield server.recording_add('test', 'Das Erste', 10, t+4, t+10, start_padding=0, stop_padding=0)
     if 0:
         yield server.recording_remove(2)
     if 1:

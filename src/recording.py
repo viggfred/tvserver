@@ -35,11 +35,13 @@ __all__ = [ 'Recording' ]
 import time
 import copy
 import re
+import string
 import logging
 import os
 
 # kaa imports
 import kaa
+from kaa.utils import utc2localtime, property
 
 # freevo imports
 import freevo.fxdparser
@@ -108,7 +110,7 @@ class Recording(object):
                 setattr(self, key, kaa.str_to_unicode(value))
             elif key == 'url' and value:
                 self.url = kaa.unicode_to_str(value)
-            elif key in ('start-padding', 'stop_padding'):
+            elif key in ('start_padding', 'stop_padding'):
                 setattr(self, key, int(value))
             elif value:
                 self.info[key] = kaa.str_to_unicode(value)
@@ -143,6 +145,29 @@ class Recording(object):
                 for info in child.children:
                     self.info[info.name] = info.content
 
+    @property
+    def url(self):
+        """
+        URL, absolute or relative filename
+        """
+        if self.__url:
+            # something is set, return it
+            return self.__url
+        filename_array = { 'progname': kaa.unicode_to_str(self.name),
+                           'title'   : kaa.unicode_to_str(self.subtitle) }
+        filemask = config.recording.filemask % filename_array
+        filename = ''
+        for letter in time.strftime(filemask, time.localtime(utc2localtime(self.start))):
+            if letter in string.ascii_letters + string.digits:
+                filename += letter
+            elif filename and filename[-1] != '_':
+                filename += '_'
+        return filename.rstrip(' -_:')
+
+    @url.setter
+    def url(self, url):
+        self.__url = url
+
     def schedule(self, device):
         """
         Schedule the recording on the given device
@@ -165,21 +190,21 @@ class Recording(object):
         self._scheduled_start = start
         self._scheduled_stop = stop
         log.info('schedule %s on %s' % (self.name, device))
-        device.record(self, start, stop)
+        device.add_recording(self, start, stop)
 
     def remove(self):
         """
         Remove from scheduled recorder.
         """
         if self._scheduled_recorder:
-            self._scheduled_recorder.remove(self)
+            self._scheduled_recorder.remove_recording(self)
         self._scheduled_recorder = None
 
     def create_fxd(self):
         """
         Create a fxd file for the recording.
         """
-        if not self.url.startswith('file:'):
+        if self.url.find('://') > 0 and not url.startswith('file:'):
             return
         # create root node
         fxd = freevo.fxdparser.Document()
@@ -188,9 +213,6 @@ class Recording(object):
         if self.fxdname:
             fxd.title = self.fxdname
         movie = fxd.add_child('movie', title=title)
-        # add <video> to movie
-        video = movie.add_child('video')
-        video.add_child('file', os.path.basename(self.url[5:]), id='f1')
         # add <info> to movie
         info = movie.add_child('info')
         if self.episode:
@@ -205,10 +227,14 @@ class Recording(object):
             info.add_child(key, value)
         info.add_child('runtime', '%s min.' % int((self.stop - self.start) / 60))
         info.add_child('record-start', int(time.time()))
-        info.add_child('record-stop', self.stop + self.stop_padding)
-        info.add_child('year', time.strftime('%m-%d %H:%M', time.localtime(self.start)))
+        info.add_child('record-stop', utc2localtime(self.stop) + self.stop_padding)
+        info.add_child('year', time.strftime('%m-%d %H:%M',
+            time.localtime(utc2localtime(self.start))))
         # and save file
-        fxd.save(os.path.splitext(self.url[5:])[0] + '.fxd')
+        tmp = kaa.tempfile('fxd', True)
+        fxd.save(tmp)
+        self._scheduled_recorder.create_fxd(self.url + '.fxd', open(tmp).read())
+        os.unlink(tmp)
 
     def __str__(self):
         """
@@ -249,8 +275,8 @@ class Recording(object):
             info['subtitle'] = self.subtitle
         if self.episode:
             info['episode'] = self.episode
-        if self.url:
-            info['url'] = kaa.str_to_unicode(self.url)
+        if self.__url:
+            info['url'] = kaa.str_to_unicode(self.__url)
         if self.description:
             info['description'] = kaa.str_to_unicode(self.description)
         return self.id, self.name, self.channel, self.priority, self.start, \
@@ -266,13 +292,11 @@ class Recording(object):
                     'subtitle', 'fxdname', 'episode', 'description'):
             if getattr(self, var):
                 node.add_child(var, getattr(self, var))
-        if self.url:
-            node.add_child('url', kaa.str_to_unicode(self.url))
-
+        if self.__url:
+            node.add_child('url', kaa.str_to_unicode(self.__url))
         node.add_child('timer', start=_time_int2str(self.start),
                        stop=_time_int2str(self.stop))
         node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
-
         info = node.add_child('info')
         for key, value in self.info.items():
             info.add_child(key, value)

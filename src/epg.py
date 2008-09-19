@@ -40,6 +40,7 @@ import kaa
 
 # freevo imports
 import kaa.epg
+from kaa.utils import localtime2utc, utctime
 
 # record imports
 from record_types import *
@@ -80,7 +81,7 @@ def check(recordings, favorites):
 
     @note: this function modifies the given recordings and favorites list
     """
-    ctime = time.time() + 60 * 15 + time.timezone
+    ctime = utctime() + 60 * 15
     to_check = [ r for r in recordings if r.start - r.start_padding > ctime \
                  and r.status in (CONFLICT, SCHEDULED) ]
     # check recordings
@@ -157,7 +158,7 @@ def check_favorite(fav, recordings):
         # 'like' search
         listing = kaa.epg.search(title=kaa.epg.QExpr('like', fav.name), utc=False)
     now = time.time()
-    # now and listing start and stop times are in localtime, not UTC. This makes
+    # now listing start and stop times are in localtime, not UTC. This makes
     # it much easier to handle the time and date templates in Favorites.
     for p in listing:
         if not fav.match(p.title, p.channel.name, p.start):
