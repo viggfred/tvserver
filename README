@@ -14,11 +14,6 @@ the epg, later versions of the tvserver should include that.
 
 2. Requirements of setup
 
-You need to have tvdev running with a correct mbus setup. Please read
-the README file of the tvdev application. You also need to have XMLTV
-configured and a valid database. The default location for the database
-is /var/lib/freevo/epg.sqlite and currect SVN requires pysqlite2 as
-backend. If you have an older database please rebuild it.
 
 
 3. Basic setup

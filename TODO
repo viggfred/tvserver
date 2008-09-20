@@ -1,11 +1,5 @@
-When starting live-tv the server uses the best possible recorder
-without checking if it is busy right now. This could kill a current
-running recording.
-
 The channels mapping code (device names to epg names) needs much
 improvement. Maybe create some share files to hold some basic mapping.
-
-Some mbus command are still missing, like changing a favorite
 
 A one shot favorite will be deleted when a recording is created. But
 it should only be deleted if that recording is successful and should
@@ -14,12 +8,9 @@ stay if not.
 The usual: inline doc, helping doc, header cleanup (point to the
 correct AUTHORS file)
 
-Create a small doc how the mbus commands work so that it is possible
-to use the tvserver outside Freevo (e.g. with a gtk app using gmbus).
-
 Do not stop on config erros like missing record dir or new epg
 mappings. Just go into idle mode and make it possible to configure the
-server over mbus (e.g. with the webserver)
+server over rpc (e.g. with the webserver)
 
 The interactive mode needs much more work
 
@@ -29,8 +20,3 @@ long. It could be freevo-tvsrv or even only tvserver or tvd.
 When kaa.epg is replaced by kaa.epg, move all the epg grabber logic
 into this module or kaa.epg. The tv_grab helper should be removed in
 freevo ui.
-
-Make it possible to send the current channel list over mbus. Other
-parts of Freevo should not use the db to find all possible channels,
-they should ask the tvserver and after that request the data from
-kaa.epg on that channels (some may not even in the db).
