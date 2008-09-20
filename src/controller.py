@@ -90,7 +90,7 @@ class Controller(object):
         if self.locked:
             # system busy, call again later
             self.print_schedule()
-            return True
+            return False
         if hasattr(self, 'only_print_current'):
             # print only latest recordings
             all = False
@@ -110,6 +110,7 @@ class Controller(object):
         for f in self.favorites:
             info += '%s\n' % f
         log.info(info)
+        return True
 
     @kaa.coroutine()
     def reschedule(self):
@@ -119,7 +120,7 @@ class Controller(object):
         if self.locked:
             # system busy, call again later
             kaa.OneShotTimer(self.reschedule).start(0.1)
-            yield True
+            yield False
         self.locked = True
         # get current time
         ctime = utctime()
@@ -138,6 +139,7 @@ class Controller(object):
             if r.start < ctime + SCHEDULE_TIMER and r.status == SCHEDULED:
                 r.schedule()
         self.locked = False
+        yield True
 
     @kaa.coroutine()
     def check_favorites_and_reschedule(self):
@@ -147,11 +149,12 @@ class Controller(object):
         if self.locked:
             # system busy, call again later
             kaa.OneShotTimer(self.check_favorites_and_reschedule).start(0.1)
-            return
+            yield False
         self.locked = True
         yield epg.check(self.recordings, self.favorites)
         self.locked = False
         self.reschedule()
+        yield True
 
     #
     # load / save fxd file with recordings and favorites

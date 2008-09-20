@@ -91,7 +91,8 @@ class RPCServer(Controller):
         """
         Reschedule all recordings.
         """
-        yield super(RPCServer, self).reschedule()
+        if not (yield super(RPCServer, self).reschedule()):
+            yield False
         sending = []
         listing = []
         for r in self.recordings:
@@ -105,6 +106,7 @@ class RPCServer(Controller):
             log.info("send update for %s recordings", len(sending))
             for c in self._clients:
                 c.rpc('recording_update', *sending)
+        yield True
 
     def _recorder_start(self, recording):
         super(RPCServer, self)._recorder_start(recording)
@@ -215,7 +217,7 @@ class RPCDevice(TVDevice):
         super(RPCDevice, self).remove(recording)
         # update recordings at the remote application
         self.sync()
-        
+
     @kaa.coroutine(policy=kaa.POLICY_SYNCHRONIZED)
     def sync(self):
         """
