@@ -6,12 +6,12 @@
 #
 # -----------------------------------------------------------------------------
 # Freevo - A Home Theater PC framework
-# Copyright (C) 2002-2005 Krister Lagerstrom, Dirk Meyer, et al.
+# Copyright (C) 2005-2006,2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
 #
-# Please see the file doc/CREDITS for a complete list of authors.
+# Please see the file AUTHORS for a complete list of authors.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,20 +30,26 @@
 # -----------------------------------------------------------------------------
 
 import sys
-from freevo.distribution import setup
+
+try:
+    # kaa base imports
+    from kaa.distribution.core import Extension, setup
+except ImportError:
+    print 'kaa.base not installed'
+    sys.exit(1)
 
 # We require python 2.5 or later, so complain if that isn't satisfied.
 if sys.version.split()[0] < '2.5':
     print "Python 2.5 or later required."
     sys.exit(1)
 
-# now start the python magic
-setup (name         = 'freevo-tvserver',
-       module       = 'tvserver',
-       version      = '2.0',
-       description  = 'Freevo TV Server',
-       author       = 'Dirk Meyer, et al.',
-       author_email = 'freevo-devel@lists.sourceforge.net',
-       url          = 'http://www.freevo.org',
-       license      = 'GPL',
-       )
+setup(project='freevo',
+      module       = 'tvserver',
+      version      = '2.0.0',
+      license      = 'GPL',
+      summary      = 'Freevo TV Server',
+      author       = 'Dirk Meyer, et al.',
+      author_email = 'freevo-devel@lists.sourceforge.net',
+      url          = 'http://www.freevo.org',
+      scripts      = [ 'bin/freevo-tvserver' ]
+)

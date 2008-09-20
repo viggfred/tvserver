@@ -1,4 +1,4 @@
-The module is part of Freevo
+The module is part of Freevo 2.0
 
 Maintainer of this module:
 
@@ -7,3 +7,7 @@ Dirk Meyer <dischi@freevo.org>
 Contributions:
 
 Rob Shortt <rob@tvcentric.com>
+Jason Tackaberry <tack@sault.org>
+
+Loosely based on the recordserver from Freevo 1.x
+Freevo 1.x is copyright by Krister Lagerstrom, Dirk Meyer, et al.
