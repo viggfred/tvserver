@@ -1,28 +1,12 @@
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# favorite.py -
+# favorite.py - Favorite for the TVServer Client
 # -----------------------------------------------------------------------------
 # $Id$
 #
-# Example for favorite in tvschedule.fxd
-#
-# <favorite id="1">
-#     <name>Genial daneben - Die Comedy-Arena</name>
-#     <priority>50</priority>
-#     <days>5 6</days>
-#     <channels>
-#         <channel>SAT1</channel>
-#     </channels>
-#     <times>
-#         <start>20:10-20:20</start>
-#         <start>21:00-23:50</start>
-#     </times>
-#     <padding start="0" stop="0"/>
-# </favorite>
-#
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2004-2008 Dirk Meyer, et al.
+# Copyright (C) 2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -45,203 +29,101 @@
 #
 # -----------------------------------------------------------------------------
 
-__all__ = [ 'Favorite' ]
+__all__ = [ 'Favorite', 'Favorites' ]
 
 # python imports
-import re
 import time
-import logging
 
-# kaa imports
-import kaa
-
-# record imports
-from config import config
-
-# get logging object
-log = logging.getLogger('tvserver')
-
-# internal regexp for time format
-_time_re = re.compile('([0-9]*):([0-9]*)-([0-9]*):([0-9]*)')
 
 class Favorite(object):
     """
-    Base class for a favorite.
+    A favorite object from the tvserver
     """
-    NEXT_ID = 0
+    def __init__(self, link, *args):
+        """
+        The init function creates the object. The parameters are the complete
+        list of the favorite_list return.
+        """
+        self.id, self.title, self.channels, self.priority, self.days, self.times, \
+                 self.one_shot, self.substring = args
+        self._link = link
 
-    def __init__(self, name='unknown', channels=None, priority=0, days=None,
-                 times=None, once=False, substring=False, node=None):
-        self.id = Favorite.NEXT_ID
-        Favorite.NEXT_ID += 1
-        self.name = name
-        self.channels = channels or []
-        self.priority = priority
-        self.days = days or []
-        self.url = ''
-        self.fxdname = ''
-        self.once = once
-        self.substring = substring
-        self.times = times or []
-        self.start_padding = config.recording.start_padding
-        self.stop_padding  = config.recording.stop_padding
-        if node:
-            self._add_xml_data(node)
+    def remove(self, id):
+        """
+        remove the favorite
+        """
+        return self._link.favorite_remove(self.id)
 
-    def _add_xml_data(self, node):
+    def modify(self, id, **kwargs):
         """
-        Parse informations from a fxd node and set the internal variables.
+        modify the favorite
         """
-        for child in node:
-            for var in ('name', 'fxdname'):
-                if child.nodename == var:
-                    setattr(self, var, child.content)
-            if child.nodename == 'url':
-                self.url = kaa.unicode_to_str(child.content)
-            if child.nodename == 'once':
-                self.once = True
-            if child.nodename == 'substring':
-                self.substring = True
-            if child.nodename == 'channels':
-                self.channels = []
-                for c in child:
-                    self.channels.append(c.content)
-            if child.nodename == 'days':
-                self.days = []
-                for v in child.content.split(' '):
-                    self.days.append(int(v))
-            if child.nodename == 'times':
-                self.times = []
-                for t in child:
-                    self.times.append(t.content)
-            if child.nodename == 'padding':
-                self.start_padding = int(child.start)
-                self.stop_padding  = int(child.stop)
-            if child.nodename == 'priority':
-                setattr(self, 'priority', int(child.content))
+        return self._link.favorite_modify(self.id, **kwargs)
 
-    def match(self, name, channel, start):
-        """
-        Return True if name, channel and start match this favorite.
-        @note: start time is local time and not UTC
-        """
-        if kaa.str_to_unicode(name.lower()) != self.name.lower() and not self.substring:
-            return False
-        if name.lower().find(self.name.lower()) == -1:
-            return False
-        if not channel in self.channels:
-            return False
-        timestruct = time.localtime(start)
-        if not int(time.strftime('%w', timestruct)) in self.days:
-            return False
-        stime = int(timestruct[3]) * 100 + int(timestruct[4])
-        for t in self.times:
-            m = _time_re.match(t).groups()
-            start = int(m[0])*100 + int(m[1])
-            stop  = int(m[2])*100 + int(m[3])
-            if stime >= start and stime <= stop:
-                return True
-        return False
 
-    def _fill_template(self, rec, text, is_url):
+class Favorites(list):
+    """
+    List of Favorite objects
+    """
+    def __init__(self, link):
         """
-        Fill template like url and fxdname from the favorite to something
-        specific for the recording.
+        Create Favorites list
         """
-        t = time.strftime('%Y %m %d %H:%M', time.localtime(rec.start))
-        year, month, day, hour_min = t.split(' ')
-        options = { 'title'    : rec.name,
-                    'year'     : year,
-                    'month'    : month,
-                    'day'      : day,
-                    'time'     : hour_min,
-                    'episode'  : rec.episode,
-                    'subtitle' : rec.subtitle }
-        if is_url:
-            # url is string and an extra '/' is not allowed. Replace '/'
-            # with '_' and also convert all args to string.
-            for o in options:
-                options[o] = kaa.unicode_to_str(options[o]).replace('/', '_')
-        for pattern in re.findall('%\([a-z]*\)', text):
-            if not str(pattern[2:-1]) in options:
-                options[pattern[2:-1]] = pattern
-        text = re.sub('%\([a-z]*\)', lambda x: x.group(0)+'s', text)
-        text = text % options
-        return text.rstrip(' -_:')
+        super(Favorites, self).__init__()
+        self._link = link
 
-    def update_recording(self, rec):
+    def _clear(self):
         """
-        Update recording based on data from the favorite
+        Clear the list
         """
-        rec.favorite = True
-        rec.start_padding = self.start_padding
-        rec.stop_padding  = self.stop_padding
-        rec.fxdname = self.fxdname
-        if self.url:
-            # add url template to recording
-            try:
-                url = self._fill_template(rec, self.url, True)
-                rec.url = kaa.unicode_to_str(url)
-            except Exception, e:
-                log.exception('Error setting recording url')
-        if self.fxdname:
-            # add fxd name template to recording
-            try:
-                rec.fxdname = self._fill_template(rec, self.fxdname, False)
-            except Exception, e:
-                log.exception('Error setting recording fxd name:')
-                rec.fxdname = ''
-        return True
+        while self:
+            self.pop(0)
 
-    def __str__(self):
+    def _update(self, favorites):
         """
-        A simple string representation for a favorite for debugging in the
-        tvserver.
+        Handle updated list from tvserver
         """
-        name = self.name
-        if len(name) > 30:
-            name = name[:30] + u'...'
-        name = kaa.unicode_to_str(u'"' + name + u'"')
-        if self.once: once = '(schedule once)'
-        else: once = ''
-        if self.substring: substring = '(substring matching)'
-        else: substring = '(exact matching)'
-        return '%3d %-35s %4d %s %s' % (self.id, name, self.priority, once, substring)
+        for f in favorites:
+            for localf in self:
+                if localf.id == f[0]:
+                    favorites.remove(localf)
+                    break
+            self.append(Favorite(self._link, *f))
 
-    def to_list(self):
+    def get(self, title, channel, start, stop):
         """
-        Return a long list with every information about the favorite.
+        Get favorite based on title, channel, start and stop time.
         """
-        return self.id, self.name, self.channels, self.priority, self.days, \
-               self.times, self.once, self.substring
+        day = min(time.localtime(start)[6] + 1, 6)
+        for f in self:
+            if title == f.title and channel in f.channels and day in f.days:
+                return f
+        return None
 
-    def __xml__(self, root):
+    def add(self, title, channels, days, times, priority, once):
         """
-        Convert Favorite into kaa.xmlutils.Element
-        """
-        node = root.add_child('favorite', id=self.id)
-        for var in ('name', 'priority', 'url', 'fxdname'):
-            if getattr(self, var):
-                node.add_child(var, getattr(self, var))
-        node.add_child('days', ' '.join([ str(d) for d in self.days]))
-        channels = node.add_child('channels')
-        for chan in self.channels:
-            channels.add_child('channel', chan)
-        times = node.add_child('times')
-        for t in self.times:
-            times.add_child('start', t)
-        if self.once:
-            node.add_child('once')
-        if self.substring:
-            node.add_child('substring')
-        node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
-        return node
+        add a favorite
 
-    def __cmp__(self, obj):
+        @param channels: list of channel names are 'ANY'
+        @param days: list of days ( 0 = Sunday - 6 = Saturday ) or 'ANY'
+        @param times: list of hh:mm-hh:mm or 'ANY'
+        @param priority: priority for the recordings
+        @param once: True if only one recodring should be made
         """
-        Compare basic informations between Favorite objects
+        return self._link.favorite_add(title, channels, priority, days, times, once)
+
+    def remove(self, id):
         """
-        if not isinstance(obj, Favorite):
-            return True
-        return self.name != obj.name or self.channels != obj.channels or \
-               self.days != obj.days or self.times != obj.times
+        remove a favorite
+
+        @param id: id of the favorite
+        """
+        return self._link.favorite_remove(id)
+
+    def modify(self, id, **kwargs):
+        """
+        modify the favorite
+
+        @param id: id of the favorite
+        """
+        return self._link.favorite_modify(id, **kwargs)

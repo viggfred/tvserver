@@ -1,6 +1,6 @@
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# rpc.py - kaa.rpc based server
+# rpc.py - kaa.rpc interface to connect to a TVServer
 # -----------------------------------------------------------------------------
 # $Id$
 #
@@ -29,233 +29,142 @@
 #
 # -----------------------------------------------------------------------------
 
-__all__ = [ 'RPCServer' ]
-
 # python imports
 import logging
+import time
 
 # kaa imports
+import kaa
 import kaa.rpc
 import kaa.epg
+from kaa.utils import utc2localtime, localtime2utc
 
 # tvserver imports
-from config import config
-from controller import Controller
-from device import TVDevice, add_device, remove_device, get_devices
+from recording import Recordings
+from favorite import Favorites
 
 # get logging object
 log = logging.getLogger('tvserver')
 
-class RPCServer(Controller):
+class TVServer(object):
 
-    def __init__(self, datafile):
-        self._last_listing = []
-        self._clients = []
-        super(RPCServer, self).__init__(datafile)
+    rpc = None
 
-    def listen(self):
-        """
-        Start RPC listen mode for incoming connections
-        """
-        self._rpc = kaa.rpc.Server(config.rpc.address, config.rpc.password)
-        self._rpc.signals['client_connected'].connect(self.client_connected)
-        self._rpc.connect(self)
-        # get kaa.epg address and port
-        ip, port = config.rpc.address.split(':')
-        kaa.epg.listen('%s:%s' % (ip, int(port) + 1), config.rpc.password)
-        
-    @kaa.coroutine()
-    def client_connected(self, client):
-        """
-        Connect a new client to the server.
-        """
-        client.signals['closed'].connect(self.client_closed, client)
-        info = (yield client.rpc('identify'))
-        if info == 'client':
-            self._clients.append(client)
-        else:
-            add_device(RPCDevice(client, *info))
+    def __init__(self, address, password):
+        self.signals = kaa.Signals('connected', 'disconnected', 'changed')
+        self.recordings = Recordings(self)
+        self.favorites = Favorites(self)
+        self.address = address
+        self.password = password
+        self._connect()
 
-    def client_closed(self, client):
-        """
-        Callback when a client disconnects.
-        """
-        log.info('Client disconnected: %s', client)
-        if client in self._clients:
-            self._clients.remove(client)
-        else:
-            for device in get_devices():
-                if device._rpc == client:
-                    remove_device(device)
-                    break
-            else:
-                log.error('unable to find device %s' % client)
+    def _connect(self):
+        try:
+            self._link = kaa.rpc.Client(self.address, self.password)
+            self._link.connect(self)
+            self._link.signals['closed'].connect(self._disconnected)
+            self.rpc = self._link.rpc
+            address, port = self.address.split(':')
+            kaa.epg.connect('%s:%s' % (address, int(port) + 1), self.password)
+            self.rpc('recording_list').connect(self.recordings._update)
+            l = self.rpc('favorite_list')
+            l.connect(self.favorites._update)
+            l.connect(self._connected)
+        except kaa.rpc.ConnectError:
+            kaa.OneShotTimer(self._connect).start(1)
 
-    @kaa.coroutine()
-    def reschedule(self):
-        """
-        Reschedule all recordings.
-        """
-        if not (yield super(RPCServer, self).reschedule()):
-            yield False
-        sending = []
-        listing = []
-        for r in self.recordings:
-            to_list = r.to_list()
-            listing.append(to_list)
-            if not to_list in self._last_listing:
-                sending.append(to_list)
-        self._last_listing = listing
-        # send update to all clients
-        if sending:
-            log.info("send update for %s recordings", len(sending))
-            for c in self._clients:
-                c.rpc('recording_update', *sending)
-        yield True
+    def _connected(self, *args):
+        log.info('connected to tvserver')
+        self.signals['connected'].emit()
 
-    def _recorder_start(self, recording):
-        super(RPCServer, self)._recorder_start(recording)
-        # send update to all clients
-        for c in self._clients:
-            c.rpc('recording_update', recording.to_list())
+    def _disconnected(self):
+        self.signals['disconnected'].emit()
+        log.info('disconnected from tvserver')
+        kaa.OneShotTimer(self._connect).start(1)
+        self.recordings._clear()
+        self.favorites._clear()
+        self.rpc = None
 
-    def _recorder_stop(self, recording):
-        super(RPCServer, self)._recorder_stop(recording)
-        # send update to all clients
-        for c in self._clients:
-            c.rpc('recording_update', recording.to_list())
+    @property
+    def connected(self):
+        return self.rpc is not None
 
-    @kaa.rpc.expose()
-    def recording_list(self):
-        """
-        list the current recordins in a short form.
-        """
-        log.info('send list for %s recordings' % len(self.recordings))
-        return [ r.to_list() for r in self.recordings ]
-
-    @kaa.rpc.expose()
     def recording_add(self, name, channel, priority, start, stop, **info):
         """
-        add a new recording
-        """
-        return super(RPCServer, self).recording_add(
-            name, channel, priority, start, stop, **info).id
+        Schedule a recording
 
-    @kaa.rpc.expose()
+        @param name: name of the program
+        @param channel: name of the channel
+        @param start: start time in localtime
+        @param stop: stop time in localtime
+        @param info: additional information
+        @returns: InProgress object
+        """
+        if not self.connected:
+            raise RuntimeError('not connected to tvserver')
+        start = localtime2utc(start)
+        stop = localtime2utc(stop)
+        return self.rpc('recording_add', name, channel, priority, start, stop, **info)
+
     def recording_remove(self, id):
         """
-        remove a recording
-        """
-        return super(RPCServer, self).recording_remove(id)
+        Remove a recording
 
-    @kaa.rpc.expose()
-    def rpc_recording_modify(self, id, **kwargs):
+        @param id: id the the recording to be removed
+        @returns: InProgress object
         """
-        modify a recording
-        """
-        return super(RPCServer, self).rpc_recording_modify(id, **kwargs)
+        if not self.connected:
+            raise RuntimeError('not connected to tvserver')
+        return self.rpc('recording_remove', id)
 
-    @kaa.rpc.expose()
-    def favorite_update(self):
-        """
-        updates favorites with data from the database
-        """
-        return super(RPCServer, self).favorite_update()
-
-    @kaa.rpc.expose()
-    def favorite_list(self):
-        """
-        Return list of all favorites
-        """
-        log.info('send list for %s favorites' % len(self.favorites))
-        return [ f.to_list() for f in self.favorites ]
-
-    @kaa.rpc.expose()
-    def favorite_add(self, name, channels, priority, days, times, once, substring):
+    def favorite_add(self, title, channels, days, times, priority, once):
         """
         add a favorite
-        """
-        super(RPCServer, self).favorite_add(
-            name, channels, priority, days, times, once, substring)
-        # send update to all clients
-        msg = [ f.to_list() for f in self.favorites ]
-        for c in self._clients:
-            c.rpc('favorite_update', *msg)
 
-    @kaa.rpc.expose()
+        @param channels: list of channel names are 'ANY'
+        @param days: list of days ( 0 = Sunday - 6 = Saturday ) or 'ANY'
+        @param times: list of hh:mm-hh:mm or 'ANY'
+        @param priority: priority for the recordings
+        @param once: True if only one recodring should be made
+        """
+        if not self.connected:
+            raise RuntimeError('not connected to tvserver')
+        if channels == 'ANY':
+            channels = [ c.name for c in kaa.epg.get_channels() ]
+        if days == 'ANY':
+            days = [ 0, 1, 2, 3, 4, 5, 6 ]
+        if times == 'ANY':
+            times = [ '00:00-23:59' ]
+        return self.rpc('favorite_add', title, channels, priority, days, times, once)
+
     def favorite_remove(self, id):
         """
         remove a favorite
-        """
-        super(RPCServer, self).favorite_remove(id)
-        # send update to all clients
-        msg = [ f.to_list() for f in self.favorites ]
-        for c in self._clients:
-            c.rpc('favorite_update', *msg)
 
-    @kaa.rpc.expose()
+        @param id: id of the favorite
+        """
+        if not self.connected:
+            raise RuntimeError('not connected to tvserver')
+        return self.rpc('favorite_remove', id)
+
     def favorite_modify(self, id, **kwargs):
         """
-        modify a recording
+        @param id: id of the favorite
         """
-        super(RPCServer, self).favorite_modify(id, **kwargs)
-        # send update to all clients
-        msg = [ f.to_list() for f in self.favorites ]
-        for c in self._clients:
-            c.rpc('favorite_update', *msg)
-
-
-class RPCDevice(TVDevice):
-
-    def __init__(self, rpcsocket, name, priority, multiplexes, capabilities):
-        super(RPCDevice, self).__init__(name, priority, multiplexes, capabilities)
-        rpcsocket.connect(self)
-        self._rpc = rpcsocket
-        self.rpc = rpcsocket.rpc
-
-    def schedule(self, recording, start, stop):
-        super(RPCDevice, self).schedule(recording, start, stop)
-        # update recordings at the remote application
-        self.sync()
-
-    def remove(self, recording):
-        super(RPCDevice, self).remove(recording)
-        # update recordings at the remote application
-        self.sync()
-
-    @kaa.coroutine(policy=kaa.POLICY_SYNCHRONIZED)
-    def sync(self):
-        """
-        Check the internal list of recordings and add or remove them from
-        the recorder.
-        """
-        for remote in self.recordings[:]:
-            if remote.id is None and not remote.valid:
-                # remove it from the list, looks like the recording
-                # was already removed and not yet scheduled
-                self.recordings.remove(remote)
-                continue
-            if remote.id is None:
-                # add the recording
-                remote.id = (yield self.rpc('schedule',
-                    remote.channel, remote.start, remote.stop, remote.url))
-                continue
-            if not remote.valid:
-                # remove the recording
-                self.recordings.remove(remote)
-                yield self.rpc('remove', remote.id)
-
-    def create_fxd(self, filename, content):
-        return self.rpc('create_fxd', filename, content)
+        if not self.connected:
+            raise RuntimeError('not connected to tvserver')
+        return self.rpc('favorite_remove', id, **kwargs)
 
     @kaa.rpc.expose()
-    def started(self, id):
-        for remote in self.recordings[:]:
-            if remote.id == id:
-                remote.started()
+    def identify(self):
+        return 'client'
 
     @kaa.rpc.expose()
-    def stopped(self, id):
-        for remote in self.recordings[:]:
-            if remote.id == id:
-                remote.stopped()
+    def recording_update(self, *recordings):
+        self.recordings._update(recordings)
+        self.signals['changed'].emit()
+
+    @kaa.rpc.expose()
+    def favorite_update(self, *fav):
+        self.recordings._update(fav)
+        self.signals['changed'].emit()

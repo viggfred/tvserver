@@ -1,11 +1,22 @@
-from rpc import RPCServer
+from recording import Recording
+from favorite import Favorite
 
-_server = None
+_client = None
 
-def init(datafile):
-    global _server
-    _server = RPCServer(datafile)
+recordings = None
+favorites = None
+signals = None
 
-def listen():
-    _server.listen()
+def connect(address, password=''):
+    from rpc import TVServer
+    global _client
+    global recordings
+    global favorites
+    global signals
+    _client = TVServer(address, password)
+    recordings = _client.recordings
+    favorites = _client.favorites
+    signals = _client.signals
 
+def wait():
+    return signals.subset('connected').any()

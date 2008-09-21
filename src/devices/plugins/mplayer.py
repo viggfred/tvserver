@@ -1,12 +1,12 @@
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# setup.py - setup script for installing the freevo module
+# mplayer.py - Mplayer based Plugin
 # -----------------------------------------------------------------------------
 # $Id$
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2005-2006,2008 Dirk Meyer, et al.
+# Copyright (C) 2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -29,26 +29,30 @@
 #
 # -----------------------------------------------------------------------------
 
-import sys
+# python imports
+import os
 
-try:
-    # kaa base imports
-    from kaa.distribution.core import Extension, setup
-except ImportError:
-    print 'kaa.base not installed'
-    sys.exit(1)
+# kaa imports
+import kaa
 
-# We require python 2.5 or later, so complain if that isn't satisfied.
-if sys.version.split()[0] < '2.5':
-    print "Python 2.5 or later required."
-    sys.exit(1)
+# tvdev imports
+from template import PluginTemplate
 
-setup(name         = 'tvserver',
-      version      = '2.0.0',
-      license      = 'GPL',
-      summary      = 'Freevo TV Server',
-      author       = 'Dirk Meyer, et al.',
-      author_email = 'freevo-devel@lists.sourceforge.net',
-      url          = 'http://www.freevo.org',
-      scripts      = [ 'bin/tvserver' ]
-)
+class Plugin(PluginTemplate):
+    def __init__(self, config):
+        super(Plugin, self).__init__(config)
+        channels = []
+        for c in open(os.path.expanduser('~/.mplayer/channels.conf')).readlines():
+            c = c.split(':')[0]
+            if not c in channels:
+                channels.append(c)
+        self.multiplexes = [ [ c ] for c in channels ]
+        self.initialized = True
+
+    def start(self, channel, url):
+        self._mplayer = kaa.Process('mplayer')
+        self._mplayer.start(('dvb://%s' % channel, '-dumpstream', '-dumpfile', url[5:]))
+        return 0
+
+    def stop(self, id):
+        self._mplayer.stop()

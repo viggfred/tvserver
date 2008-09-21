@@ -12,8 +12,11 @@ for a better way. You also need the tv_grab helper from Freevo to get
 the epg, later versions of the tvserver should include that.
 
 
-2. Requirements of setup
+2. Limitations
 
+Only dvb cards are working right now, normal analog cards are
+detected but not working. The scanning option also does not work
+correctly, you need to setup the channels.conf manually.
 
 
 3. Basic setup
@@ -27,23 +30,3 @@ running as root, a user config file is ~/.freevo/tvserver.conf.
 Also set the grabbers for the epg you want to use, e.g. xmltv in that
 file. When you restart the tvserver, you can start tvserver again
 (while the first one is running) with the paramater update-epg.
-
-Now start tvserver again and it should find the running tvdev (there
-should be a debug line showing the ip address and the devices, like
-"add <Recorder for 15782-0@192.168.1.2:dvb0>". Two seconds later the
-tvserver will stop again because he found new channels. Check the
-config file again, and the end is the epg mapping containing all
-channels found. Set the mapping to the correct xmltv id (there are
-some mappings guessed by the system, later we want a better automatic
-detection). If you don't have a mapping, just ignore the line. The
-mapping should now look like this
-
-epg.mapping[Das Erste] = ard.de
-epg.mapping[Doku KiKa] = 
-epg.mapping[EinsExtra] = extra.tvtoday.de
-epg.mapping[Eurosport] = eurosport.de
-epg.mapping[Info 3sat] = 
-epg.mapping[KABEL1] = kabel1.de
-
-Now you should be able to start the tvserver and it should not stop
-again.

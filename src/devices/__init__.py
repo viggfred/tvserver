@@ -1,12 +1,12 @@
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# setup.py - setup script for installing the freevo module
+# __init__.py - Interface to the tv device module
 # -----------------------------------------------------------------------------
 # $Id$
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2005-2006,2008 Dirk Meyer, et al.
+# Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -29,26 +29,11 @@
 #
 # -----------------------------------------------------------------------------
 
-import sys
+from system import config, info, get_devices as get
 
-try:
-    # kaa base imports
-    from kaa.distribution.core import Extension, setup
-except ImportError:
-    print 'kaa.base not installed'
-    sys.exit(1)
-
-# We require python 2.5 or later, so complain if that isn't satisfied.
-if sys.version.split()[0] < '2.5':
-    print "Python 2.5 or later required."
-    sys.exit(1)
-
-setup(name         = 'tvserver',
-      version      = '2.0.0',
-      license      = 'GPL',
-      summary      = 'Freevo TV Server',
-      author       = 'Dirk Meyer, et al.',
-      author_email = 'freevo-devel@lists.sourceforge.net',
-      url          = 'http://www.freevo.org',
-      scripts      = [ 'bin/tvserver' ]
-)
+def provide():
+    """
+    Provide devices to tvserver using kaa.rpc
+    """
+    import rpc
+    return rpc.connect(config.rpc.address, config.rpc.password)

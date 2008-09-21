@@ -1,0 +1,198 @@
+#! /usr/bin/python
+# -*- coding: iso-8859-1 -*-
+# -----------------------------------------------------------------------------
+# tvserver - start script for the tvserver
+# -----------------------------------------------------------------------------
+# $Id$
+#
+# -----------------------------------------------------------------------------
+# TVServer - A generic TV device wrapper and scheduler
+# Copyright (C) 2004-2008 Dirk Meyer, et al.
+#
+# Maintainer:    Dirk Meyer <dischi@freevo.org>
+#
+# Please see the file AUTHORS for a complete list of authors.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MER-
+# CHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+#
+# -----------------------------------------------------------------------------
+
+# python imports
+import os
+import time
+import sys
+import getopt
+import logging
+from logging.handlers import RotatingFileHandler
+
+# get logging object
+log = logging.getLogger('tvserver')
+
+# insert additional path information
+__site__ = '../lib/python%s.%s/site-packages' % sys.version_info[:2]
+__site__ = os.path.abspath(os.path.join(os.path.dirname(__file__), __site__))
+if not __site__ in sys.path:
+    sys.path.insert(0, __site__)
+
+# fix possible path problems (it crashes on some python installations)
+if os.path.dirname(__file__) in sys.path:
+    sys.path.remove(os.path.dirname(__file__))
+
+# kaa imports
+import kaa
+import kaa.utils
+
+def usage(error_code):
+    print 'tvserver [options]'
+    print 'options:'
+    print '--fg                start tvserver in foreground'
+    print '--stop              stop running tvserver'
+    print '--scheduler         start the scheduler'
+    print '--devices           start the device'
+    print '--genconfig         only generate config file and exit'
+    print '--logfile           logging filename for debugging'
+    print '--scan              scan for devices and exit'
+    print '--help | -h         this message'
+    print
+    print 'One tvserver in the network must be started with --scheduler. It is'
+    print 'the master tvserver to which all clients and devices must connect.'
+    print 'The config file for the scheduler is /etc/tvserver/scheduler.conf'
+    print 'and for users ~/.tvserver/scheduler.conf.'
+    print 'The slave tvserver must only call --devices to connect the devices on'
+    print 'that machine to the master tvserver. The config file is in the same'
+    print 'directory and called devices.conf.'
+    print 'It is possible start both the scheduler and the devices on one machine'
+    sys.exit(error_code)
+
+
+try:
+    opts = [ 'scheduler', 'devices', 'fg', 'genconfig', 'stop', 'help', 'logfile', 'scan' ]
+    opts, args = getopt.getopt(sys.argv[1:], 'h', opts)
+except getopt.GetoptError:
+    usage(1)
+
+
+logfile = '/var/log/tvserver.log'
+if os.getuid() > 0:
+    logfile = os.path.expanduser('~/.tvserver/tvserver.log')
+detach = True
+scheduler = False
+devices = False
+genconfig = False
+for o, a in opts:
+    if o == '--scheduler':
+        scheduler = True
+    if o == '--devices':
+        devices = True
+    if o == '--fg':
+        detach = False
+    if o == '--genconfig':
+        genconfig = True
+    if o == '--stop':
+        pid = kaa.utils.is_running('tvserver')
+        if not pid:
+            print 'tvserver not running'
+            sys.exit(1)
+        os.kill(pid, 15)
+        sys.exit(0)
+    elif o == '--logfile':
+        logfile = os.path.realpath(a)
+    elif o == '--scan':
+        import tvserver.devices
+        for info in tvserver.devices.info:
+            print '*** %s ***' % info.device
+            print info
+        sys.exit(0)
+    if o in ('--help', '-h'):
+        usage(0)
+
+if not scheduler and not devices:
+    usage(1)
+
+# create and setup the root logger object.
+# using logging.getLogger() gives the root logger, calling
+# logging.getLogger('foo') returns a new logger with the same default
+# settings.
+logger = logging.getLogger()
+for l in logger.handlers[:]:
+    logger.removeHandler(l)
+
+# set stdout logging
+formatter = logging.Formatter('%(levelname)s %(module)s(%(lineno)s): %(message)s')
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+# add file logger
+if os.path.dirname(logfile) and not os.path.isdir(os.path.dirname(logfile)):
+    os.makedirs(os.path.dirname(logfile))
+# create rotating log file with 1MB for each file with a backup of 3
+handler = RotatingFileHandler(logfile, maxBytes=1000000, backupCount=3)
+formatter = logging.Formatter('%(asctime)s %(levelname)-8s [%(name)6s] '+\
+                      '%(filename)s %(lineno)s: %(message)s')
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
+if scheduler:
+    import tvserver.scheduler
+    # load config file
+    tvserver.scheduler.config.load('/etc/scheduler.conf')
+    # if started as user add personal config file
+    if os.getuid() > 0:
+        cfgdir = os.path.expanduser('~/.tvserver')
+        tvserver.scheduler.config.load(os.path.join(cfgdir, 'scheduler.conf'))
+    # save the file again in case it did not exist or the variables changed
+    tvserver.scheduler.config.save()
+if devices:
+    import tvserver.devices
+    # load config file
+    tvserver.devices.config.load('/etc/devices.conf')
+    # if started as user add personal config file
+    if os.getuid() > 0:
+        cfgdir = os.path.expanduser('~/.tvserver')
+        tvserver.devices.config.load(os.path.join(cfgdir, 'devices.conf'))
+    # save the file again in case it did not exist or the variables changed
+    tvserver.devices.config.save()
+
+if genconfig:
+    sys.exit(0)
+
+# check and mark as running
+if kaa.utils.is_running('tvserver'):
+    print 'tvserver already running'
+    sys.exit(1)
+
+if detach:
+    kaa.utils.daemonize()
+
+kaa.utils.set_running('tvserver')
+
+# set additional debug
+logging.getLogger('tvserver').setLevel(logging.DEBUG)
+
+# start tvserver
+if scheduler:
+    datafile = '/etc/schedule.xml'
+    if os.getuid() > 0:
+        datafile = os.path.expanduser('~/.tvserver/schedule.xml')
+    tvserver.scheduler.init(datafile)
+    tvserver.scheduler.listen()
+if devices:
+    tvserver.devices.provide()
+
+kaa.main.run()
+
+# print debug at the end
+log.info('shutdown')

@@ -1,12 +1,12 @@
 # -*- coding: iso-8859-1 -*-
 # -----------------------------------------------------------------------------
-# recording.py -
+# recording.py - Recording for the TVServer Client
 # -----------------------------------------------------------------------------
 # $Id$
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2004-2008 Dirk Meyer, et al.
+# Copyright (C) 2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -29,287 +29,133 @@
 #
 # -----------------------------------------------------------------------------
 
-__all__ = [ 'Recording', 'MISSED', 'SAVED', 'SCHEDULED', 'RECORDING', 'CONFLICT'
-            'DELETED', 'FAILED' ]
-
-# python imports
-import time
-import copy
-import re
-import string
-import logging
-import os
+__all__ = [ 'Recording', 'Recordings' ]
 
 # kaa imports
 import kaa
-from kaa.utils import utc2localtime, property
-import kaa.xmlutils
-
-# record imports
-from config import config
-
-# get logging object
-log = logging.getLogger('tvserver')
-
-# status values
-MISSED = 'missed'
-SAVED = 'saved'
-SCHEDULED = 'scheduled'
-RECORDING = 'recording'
-CONFLICT = 'conflict'
-DELETED = 'deleted'
-FAILED = 'failed'
-
-def _time_int2str(i):
-    """
-    Helper function to create a time string from an int. The timestring
-    contains the timezone as integer, e.g. CEST == +0200. The input
-    time must be in UTC
-    """
-    adjust = time.timezone
-    if time.daylight:
-        adjust = time.altzone
-    s = time.localtime(i - adjust)
-    if adjust < 0:
-        adjust = '+%04d' % (-adjust / 36)
-    else:
-        adjust = '-%04d' % (adjust / 36)
-    return time.strftime('%Y%m%d%H%M', s) + ' ' + adjust
-
-def _time_str2int(s):
-    """
-    Helper function to create an int from a string created by _time_int2str.
-    The returned time in seconds is in UTC.
-    """
-    sec = int(time.mktime(time.strptime(s.split()[0], '%Y%m%d%H%M')))
-    return sec - int(s.split()[1]) * 36
-
+from kaa.utils import utc2localtime
 
 class Recording(object):
     """
-    Base class for a recording.
+    Recording object
     """
-    NEXT_ID = 0
+    def __init__(self, link, *args):
+        self._link = link
+        self._update(*args)
 
-    def __init__(self, name='unknown', channel='unknown', priority=0, start=0, stop=0,
-                 node=None, info={} ):
-        self.id = Recording.NEXT_ID
-        Recording.NEXT_ID += 1
-        self.name = name
-        self.channel = channel
-        self.priority = priority
-        self.start = start
-        self.stop = stop
-        # optional information
-        self.subtitle = ''
-        self.episode = ''
-        self.description = ''
-        self.url = ''
-        self.fxdname = ''
-        self.info = {}
-        self.status = CONFLICT
-        self.start_padding = config.recording.start_padding
-        self.stop_padding  = config.recording.stop_padding
-        self.respect_start_padding = True
-        self.respect_stop_padding = True
-        for key, value in info.items():
-            if key in ('subtitle', 'description') and value:
-                setattr(self, key, kaa.str_to_unicode(value))
-            elif key == 'url' and value:
-                self.url = kaa.unicode_to_str(value)
-            elif key in ('start_padding', 'stop_padding'):
-                setattr(self, key, int(value))
-            elif value:
-                self.info[key] = kaa.str_to_unicode(value)
-        # device where the tvserver wants to schedule the recording
-        self.device = None
-        # device where the recording is currently scheduled
-        self._scheduled_device = None
-        if node:
-            self._add_xml_data(node)
-
-    def _add_xml_data(self, node):
+    def _update(self, *args):
         """
-        Parse informations from a fxd node and set the internal variables.
+        Update recording based on event from tvserver or init
         """
-        # Parse informations from a fxd node and set the internal variables.
-        for child in node:
-            for var in ('name', 'channel', 'status', 'subtitle', 'fxdname',
-                        'episode', 'description'):
-                if child.nodename == var:
-                    setattr(self, var, child.content)
-            if child.nodename == 'url':
-                self.url = kaa.unicode_to_str(child.content)
-            if child.nodename == 'priority':
-                self.priority = int(child.content)
-            if child.nodename == 'padding':
-                self.start_padding = int(child.start)
-                self.stop_padding  = int(child.stop)
-            if child.nodename == 'timer':
-                self.start = _time_str2int(child.start)
-                self.stop  = _time_str2int(child.stop)
-            if child.nodename == 'info':
-                for info in child:
-                    self.info[info.nodename] = info.content
-
-    @property
-    def url(self):
-        """
-        URL, absolute or relative filename
-        """
-        if self.__url:
-            # something is set, return it
-            return self.__url
-        filename_array = { 'progname': kaa.unicode_to_str(self.name),
-                           'title'   : kaa.unicode_to_str(self.subtitle) }
-        filemask = config.recording.filemask % filename_array
-        filename = ''
-        for letter in time.strftime(filemask, time.localtime(utc2localtime(self.start))):
-            if letter in string.ascii_letters + string.digits:
-                filename += letter
-            elif filename and filename[-1] != '_':
-                filename += '_'
-        return filename.rstrip(' -_:')
-
-    @url.setter
-    def url(self, url):
-        self.__url = url
-
-    def schedule(self):
-        """
-        Schedule the recording
-        """
-        start = self.start
-        if self.respect_start_padding:
-            start -= self.start_padding
-        stop = self.stop
-        if self.respect_stop_padding:
-            stop += self.stop_padding
-        if self._scheduled_device == self.device and \
-               self._scheduled_start == start and \
-               (self._scheduled_stop == stop or \
-                self.status == RECORDING):
-            # no update
-            return
-        if self._scheduled_device:
-            self._scheduled_device.remove(self)
-        self._scheduled_device = self.device
-        self._scheduled_start = start
-        self._scheduled_stop = stop
-        log.info('schedule %s on %s' % (self.name, self.device))
-        self.device.schedule(self, start, stop)
+        self.id, self.name, self.channel, self.priority, self.start, self.stop, \
+                 self.status, self.start_padding, self.stop_padding, \
+                 self.description = args
+        self.start = utc2localtime(self.start)
+        self.stop = utc2localtime(self.stop)
 
     def remove(self):
         """
-        Remove from scheduled device.
-        """
-        if self._scheduled_device:
-            self._scheduled_device.remove(self)
-        self._scheduled_device = None
+        Remove the recording
 
-    def create_fxd(self):
+        @returns: InProgress object
         """
-        Create a fxd file for the recording.
-        """
-        if self.url.find('://') > 0 and not url.startswith('file:'):
-            return
-        # create root node
-        fxd = kaa.xmlutils.create(root='freevo')
-        # create <movie> with title
-        title = self.name
-        if self.fxdname:
-            fxd.title = self.fxdname
-        movie = fxd.add_child('movie', title=title)
-        # add <info> to movie
-        info = movie.add_child('info')
-        if self.episode:
-            info.add_child('episode', self.episode)
-            if self.subtitle:
-                info.add_child('subtitle', self.subtitle)
-        elif self.subtitle:
-            info.add_child('tagline', self.subtitle)
-        if self.description:
-            info.add_child('plot', self.description)
-        for key, value in self.info.items():
-            info.add_child(key, value)
-        info.add_child('runtime', '%s min.' % int((self.stop - self.start) / 60))
-        info.add_child('record-start', int(time.time()))
-        info.add_child('record-stop', utc2localtime(self.stop) + self.stop_padding)
-        info.add_child('year', time.strftime('%m-%d %H:%M',
-            time.localtime(utc2localtime(self.start))))
-        self._scheduled_device.create_fxd(self.url + '.fxd', fxd.toxml())
+        self._link.recording_remove(self.id)
 
     def __str__(self):
-        """
-        A simple string representation for a recording for debugging in the
-        tvserver.
-        """
-        channel = self.channel
-        if len(channel) > 10:
-            channel = channel[:10]
-        diff = (self.stop - self.start) / 60
-        name = self.name
-        if len(name) > 17:
-            name = name[:14] + u'...'
-        name = u'"' + name + u'"'
-        status = self.status
-        if status == 'scheduled' and self.device:
-            status = self.device.name
-        if self.respect_start_padding:
-            start_padding = int(self.start_padding/60)
+        if self.description.has_key('title') and self.description['title']:
+            s = self.description['title']
         else:
-            start_padding = 0
-        if self.respect_stop_padding:
-            stop_padding = int(self.stop_padding/60)
-        else:
-            stop_padding = 0
-        return '%3d %10s %-19s %4d %s/%s-%s %2s %2s %s' % \
-               (self.id, kaa.unicode_to_str(channel), kaa.unicode_to_str(name),
-                self.priority, _time_int2str(self.start)[4:8],
-                _time_int2str(self.start)[8:-6], _time_int2str(self.stop)[8:],
-                start_padding, stop_padding, kaa.unicode_to_str(status))
+            s = self.name
+        if self.description.has_key('episode') and self.description['episode']:
+            s += u' %s' % self.description['episode']
+        if self.description.has_key('subtitle') and \
+           self.description['subtitle']:
+            s += u' - %s' % self.description['subtitle']
+        return kaa.unicode_to_str(s)
 
-    def to_list(self):
-        """
-        Return a long list with every information about the recording.
-        """
-        info = copy.copy(self.info)
-        if self.subtitle:
-            info['subtitle'] = self.subtitle
-        if self.episode:
-            info['episode'] = self.episode
-        if self.__url:
-            info['url'] = kaa.str_to_unicode(self.__url)
-        if self.description:
-            info['description'] = kaa.str_to_unicode(self.description)
-        return self.id, self.name, self.channel, self.priority, self.start, \
-               self.stop, self.status, int(self.start_padding), \
-               int(self.stop_padding), info
+    def __getitem__(self, key):
+        if hasattr(self, key) and key != 'description':
+            return getattr(self, key)
+        if key == 'title':
+            return self.description.get('title') or self.name
+        if self.description.has_key(key):
+            return self.description[key]
+        raise AttributeError('no attribute %s in Recording' % key)
 
-    def __xml__(self, root):
-        """
-        Convert Recording into kaa.xmlutils.Element
-        """
-        node = root.add_child('recording', id=self.id)
-        for var in ('name', 'channel', 'priority', 'status',
-                    'subtitle', 'fxdname', 'episode', 'description'):
-            if getattr(self, var):
-                node.add_child(var, getattr(self, var))
-        if self.__url:
-            node.add_child('url', kaa.str_to_unicode(self.__url))
-        node.add_child('timer', start=_time_int2str(self.start),
-                       stop=_time_int2str(self.stop))
-        node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
-        info = node.add_child('info')
-        for key, value in self.info.items():
-            info.add_child(key, value)
-        return node
-
-    def __cmp__(self, obj):
-        """
-        Compare basic informations between Recording objects
-        """
-        if not isinstance(obj, Recording):
+    def has_key(self, key):
+        if hasattr(self, key) and key != 'description':
             return True
-        return self.name != obj.name or self.channel != obj.channel or \
-               self.start != obj.start or self.stop != obj.stop
+        if key == 'title':
+            return True
+        return self.description.has_key(key)
+
+
+class Recordings(object):
+    """
+    List of Recordings
+    """
+    def __init__(self, link):
+        self._link = link
+        self._recordings = {}
+
+    def _clear(self):
+        """
+        Clear the list
+        """
+        self._recordings = {}
+
+    def _update(self, recordings):
+        """
+        Update list of recordings based on event from tvserver
+        """
+        for r in recordings:
+            for key, v in self._recordings.items():
+                if v.id == r[0]:
+                    localr = self._recordings.pop(key)
+                    localr._update(*r)
+                    break
+            else:
+                localr = Recording(self._link, *r)
+            key = '%s-%s-%s' % (localr.channel, localr.start, localr.stop)
+            self._recordings[key] = localr
+
+    def __iter__(self):
+        """
+        Iterate through the list of recordings
+        """
+        return self._recordings.values().__iter__()
+
+    def schedule(self, name, channel, priority, start, stop, **info):
+        """
+        Schedule a recording
+
+        @param name: name of the program
+        @param channel: name of the channel
+        @param start: start time in localtime
+        @param stop: stop time in localtime
+        @param info: additional information
+        @returns: InProgress object
+        """
+        return self._link.recording_add(name, channel, priority, start, stop, **info)
+
+    def remove(self, id):
+        """
+        Remove a recording
+
+        @param id: id the the recording to be removed
+        @returns: InProgress object
+        """
+        return self._link.recording_remove(id)
+
+    def get(self, channel, start, stop):
+        """
+        Get the recording defined by the given channel and time
+
+        @param channel: name of the channel
+        @param start: start time in localtime
+        @param stop: stop time in localtime
+        """
+        key = '%s-%s-%s' % (channel, start, stop)
+        if key in self._recordings:
+            return self._recordings[key]
+        return None
