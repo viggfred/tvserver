@@ -21,7 +21,7 @@
 # </favorite>
 #
 # -----------------------------------------------------------------------------
-# Freevo - A Home Theater PC framework
+# TVServer - A generic TV device wrapper and scheduler
 # Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
@@ -94,30 +94,30 @@ class Favorite(object):
         """
         for child in node:
             for var in ('name', 'fxdname'):
-                if child.name == var:
+                if child.nodename == var:
                     setattr(self, var, child.content)
-            if child.name == 'url':
+            if child.nodename == 'url':
                 self.url = kaa.unicode_to_str(child.content)
-            if child.name == 'once':
+            if child.nodename == 'once':
                 self.once = True
-            if child.name == 'substring':
+            if child.nodename == 'substring':
                 self.substring = True
-            if child.name == 'channels':
+            if child.nodename == 'channels':
                 self.channels = []
-                for c in child.children:
+                for c in child:
                     self.channels.append(c.content)
-            if child.name == 'days':
+            if child.nodename == 'days':
                 self.days = []
                 for v in child.content.split(' '):
                     self.days.append(int(v))
-            if child.name == 'times':
+            if child.nodename == 'times':
                 self.times = []
-                for t in child.children:
+                for t in child:
                     self.times.append(t.content)
-            if child.name == 'padding':
-                self.start_padding = int(child.getattr('start'))
-                self.stop_padding  = int(child.getattr('stop'))
-            if child.name == 'priority':
+            if child.nodename == 'padding':
+                self.start_padding = int(child.start)
+                self.stop_padding  = int(child.stop)
+            if child.nodename == 'priority':
                 setattr(self, 'priority', int(child.content))
 
     def match(self, name, channel, start):
@@ -215,9 +215,9 @@ class Favorite(object):
         return self.id, self.name, self.channels, self.priority, self.days, \
                self.times, self.once, self.substring
 
-    def to_xml(self, root):
+    def __xml__(self, root):
         """
-        Dump informations about the favorite in a fxd file node.
+        Convert Favorite into kaa.xmlutils.Element
         """
         node = root.add_child('favorite', id=self.id)
         for var in ('name', 'priority', 'url', 'fxdname'):

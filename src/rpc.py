@@ -5,7 +5,7 @@
 # $Id$
 #
 # -----------------------------------------------------------------------------
-# Freevo - A Home Theater PC framework
+# TVServer - A generic TV device wrapper and scheduler
 # Copyright (C) 2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
@@ -48,17 +48,22 @@ log = logging.getLogger('tvserver')
 
 class RPCServer(Controller):
 
-    def __init__(self):
+    def __init__(self, datafile):
         self._last_listing = []
         self._clients = []
-        super(RPCServer, self).__init__()
+        super(RPCServer, self).__init__(datafile)
+
+    def listen(self):
+        """
+        Start RPC listen mode for incoming connections
+        """
         self._rpc = kaa.rpc.Server(config.rpc.address, config.rpc.password)
         self._rpc.signals['client_connected'].connect(self.client_connected)
         self._rpc.connect(self)
         # get kaa.epg address and port
         ip, port = config.rpc.address.split(':')
         kaa.epg.listen('%s:%s' % (ip, int(port) + 1), config.rpc.password)
-
+        
     @kaa.coroutine()
     def client_connected(self, client):
         """

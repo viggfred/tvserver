@@ -111,12 +111,16 @@ if detach:
 
 kaa.utils.set_running('freevo-tvserver')
 
-from freevo.tvserver.rpc import RPCServer
+# freevo imports
+import freevo.conf
+
+import freevo.tvserver
 logging.getLogger().setLevel(logging.DEBUG)
 
 # start tvserver
 log.setLevel(logging.DEBUG)
-server = RPCServer()
+freevo.tvserver.init(freevo.conf.datafile('tvschedule.fxd'))
+freevo.tvserver.listen()
 
 kaa.main.run()
 

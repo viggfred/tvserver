@@ -31,7 +31,7 @@
 #
 #
 # -----------------------------------------------------------------------------
-# Freevo - A Home Theater PC framework
+# TVServer - A generic TV device wrapper and scheduler
 # Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>

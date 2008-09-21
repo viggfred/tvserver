@@ -5,7 +5,7 @@
 # $Id$
 #
 # -----------------------------------------------------------------------------
-# Freevo - A Home Theater PC framework
+# TVServer - A generic TV device wrapper and scheduler
 # Copyright (C) 2006-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
@@ -37,8 +37,6 @@ import logging
 
 # kaa imports
 import kaa
-
-# freevo imports
 import kaa.epg
 from kaa.utils import localtime2utc, utctime
 

@@ -5,7 +5,7 @@
 # $Id$
 #
 # -----------------------------------------------------------------------------
-# Freevo - A Home Theater PC framework
+# TVServer - A generic TV device wrapper and scheduler
 # Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
@@ -40,11 +40,8 @@ import logging
 
 # kaa imports
 import kaa
+import kaa.xmlutils
 from kaa.utils import localtime2utc, utctime
-
-# freevo imports
-import freevo.conf
-import freevo.fxdparser
 
 # tvserver imports
 from config import config
@@ -66,11 +63,10 @@ class Controller(object):
     """
     Class for the tvserver.
     """
-    def __init__(self):
+    def __init__(self, datafile):
         epg.init()
         self.locked = False
-        # file to load / save the recordings and favorites
-        self.fxdfile = freevo.conf.datafile('tvschedule.fxd')
+        self.datafile = datafile
         # load the recordings file
         self.load_schedule()
         # connect to recorder signals
@@ -130,7 +126,7 @@ class Controller(object):
         yield scheduler.schedule(self.recordings)
         # sort by start time
         self.recordings.sort(lambda l, o: cmp(l.start,o.start))
-        # save fxd file
+        # save schedule
         self.save_schedule()
         self.print_schedule()
         # Schedule recordings on recorder for the next SCHEDULE_TIMER seconds.
@@ -157,24 +153,24 @@ class Controller(object):
         yield True
 
     #
-    # load / save fxd file with recordings and favorites
+    # load / save schedule file with recordings and favorites
     #
 
     def load_schedule(self):
         """
-        load the fxd file
+        load the schedule file
         """
         self.recordings = []
         self.favorites = []
-        if not os.path.isfile(self.fxdfile):
+        if not os.path.isfile(self.datafile):
             return
         try:
-            fxd = freevo.fxdparser.Document(self.fxdfile)
+            xml = kaa.xmlutils.create(self.datafile, root='schedule')
         except Exception, e:
-            log.exception('tvserver.load: %s corrupt:' % self.fxdfile)
+            log.exception('tvserver.load: %s corrupt:' % self.datafile)
             sys.exit(1)
-        for child in fxd.children:
-            if child.name == 'recording':
+        for child in xml:
+            if child.nodename == 'recording':
                 try:
                     r = Recording(node=child)
                 except Exception, e:
@@ -190,7 +186,7 @@ class Controller(object):
                     # everything is a conflict for now
                     r.status = CONFLICT
                 self.recordings.append(r)
-            if child.name == 'favorite':
+            if child.nodename == 'favorite':
                 try:
                     f = Favorite(node=child)
                 except Exception, e:
@@ -201,15 +197,15 @@ class Controller(object):
     @kaa.timed(1, kaa.OneShotTimer, policy=kaa.POLICY_RESTART)
     def save_schedule(self):
         """
-        save the fxd file
+        save the schedule file
         """
-        log.info('save fxd file')
-        fxd = freevo.fxdparser.Document()
+        log.info('save schedule')
+        xml = kaa.xmlutils.create(root='schedule')
         for r in self.recordings:
-            r.to_xml(fxd)
+            r.__xml__(xml)
         for f in self.favorites:
-            f.to_xml(fxd)
-        fxd.save(self.fxdfile)
+            f.__xml__(xml)
+        xml.save(self.datafile)
 
     #
     # callbacks from the recorder
@@ -218,7 +214,7 @@ class Controller(object):
     def _recorder_start(self, recording):
         log.info('recording started')
         recording.status = RECORDING
-        # save fxd file
+        # save schedule file
         self.save_schedule()
         # create fxd file
         recording.create_fxd()
@@ -237,7 +233,7 @@ class Controller(object):
             recording.status = FAILED
         else:
             recording.status = SAVED
-        # save fxd file
+        # save schedule file
         self.save_schedule()
         # print some debug
         self.print_schedule()

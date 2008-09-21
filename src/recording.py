@@ -5,7 +5,7 @@
 # $Id$
 #
 # -----------------------------------------------------------------------------
-# Freevo - A Home Theater PC framework
+# TVServer - A generic TV device wrapper and scheduler
 # Copyright (C) 2004-2008 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
@@ -43,9 +43,7 @@ import os
 # kaa imports
 import kaa
 from kaa.utils import utc2localtime, property
-
-# freevo imports
-import freevo.fxdparser
+import kaa.xmlutils
 
 # record imports
 from config import config
@@ -135,24 +133,24 @@ class Recording(object):
         Parse informations from a fxd node and set the internal variables.
         """
         # Parse informations from a fxd node and set the internal variables.
-        for child in node.children:
+        for child in node:
             for var in ('name', 'channel', 'status', 'subtitle', 'fxdname',
                         'episode', 'description'):
-                if child.name == var:
+                if child.nodename == var:
                     setattr(self, var, child.content)
-            if child.name == 'url':
+            if child.nodename == 'url':
                 self.url = kaa.unicode_to_str(child.content)
-            if child.name == 'priority':
+            if child.nodename == 'priority':
                 self.priority = int(child.content)
-            if child.name == 'padding':
-                self.start_padding = int(child.getattr('start'))
-                self.stop_padding  = int(child.getattr('stop'))
-            if child.name == 'timer':
-                self.start = _time_str2int(child.getattr('start'))
-                self.stop  = _time_str2int(child.getattr('stop'))
-            if child.name == 'info':
-                for info in child.children:
-                    self.info[info.name] = info.content
+            if child.nodename == 'padding':
+                self.start_padding = int(child.start)
+                self.stop_padding  = int(child.stop)
+            if child.nodename == 'timer':
+                self.start = _time_str2int(child.start)
+                self.stop  = _time_str2int(child.stop)
+            if child.nodename == 'info':
+                for info in child:
+                    self.info[info.nodename] = info.content
 
     @property
     def url(self):
@@ -216,7 +214,7 @@ class Recording(object):
         if self.url.find('://') > 0 and not url.startswith('file:'):
             return
         # create root node
-        fxd = freevo.fxdparser.Document()
+        fxd = kaa.xmlutils.create(root='freevo')
         # create <movie> with title
         title = self.name
         if self.fxdname:
@@ -239,11 +237,7 @@ class Recording(object):
         info.add_child('record-stop', utc2localtime(self.stop) + self.stop_padding)
         info.add_child('year', time.strftime('%m-%d %H:%M',
             time.localtime(utc2localtime(self.start))))
-        # and save file
-        tmp = kaa.tempfile('fxd', True)
-        fxd.save(tmp)
-        self._scheduled_device.create_fxd(self.url + '.fxd', open(tmp).read())
-        os.unlink(tmp)
+        self._scheduled_device.create_fxd(self.url + '.fxd', fxd.toxml())
 
     def __str__(self):
         """
@@ -292,9 +286,9 @@ class Recording(object):
                self.stop, self.status, int(self.start_padding), \
                int(self.stop_padding), info
 
-    def to_xml(self, root):
+    def __xml__(self, root):
         """
-        Dump informations about the recording in a fxd file node.
+        Convert Recording into kaa.xmlutils.Element
         """
         node = root.add_child('recording', id=self.id)
         for var in ('name', 'channel', 'priority', 'status',
