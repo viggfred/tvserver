@@ -13,7 +13,7 @@ def main():
     yield tvserver.wait()
     if 0:
         yield kaa.epg.update()
-        yield server.favorite_update()
+        yield tvserver.favorites.update()
     if 0:
         for r in tvserver.recordings:
             print r

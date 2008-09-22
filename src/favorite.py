@@ -100,6 +100,12 @@ class Favorites(list):
                 return f
         return None
 
+    def update(self):
+        """
+        Check list of favorites against EPG and update
+        """
+        return self._link.favorite_update()
+
     def add(self, title, channels, days, times, priority, once):
         """
         add a favorite

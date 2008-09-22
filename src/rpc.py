@@ -117,6 +117,14 @@ class TVServer(object):
             raise RuntimeError('not connected to tvserver')
         return self.rpc('recording_remove', id)
 
+    def favorite_update(self):
+        """
+        Check list of favorites against EPG and update
+        """
+        if not self.connected:
+            raise RuntimeError('not connected to tvserver')
+        return self.rpc('favorite_update')
+
     def favorite_add(self, title, channels, days, times, priority, once):
         """
         add a favorite
@@ -159,12 +167,12 @@ class TVServer(object):
     def identify(self):
         return 'client'
 
-    @kaa.rpc.expose()
-    def recording_update(self, *recordings):
+    @kaa.rpc.expose('recording_update')
+    def _recording_update(self, *recordings):
         self.recordings._update(recordings)
         self.signals['changed'].emit()
 
-    @kaa.rpc.expose()
-    def favorite_update(self, *fav):
+    @kaa.rpc.expose('favorite_update')
+    def _favorite_update(self, *fav):
         self.recordings._update(fav)
         self.signals['changed'].emit()
