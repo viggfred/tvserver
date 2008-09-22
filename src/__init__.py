@@ -20,3 +20,6 @@ def connect(address, password=''):
 
 def wait():
     return signals.subset('connected').any()
+
+def is_connected():
+    return _client and _client.connected
