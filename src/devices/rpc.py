@@ -54,6 +54,8 @@ class RPCDevice(object):
         self.device = device
         self.device.signals['started'].connect(self.started)
         self.device.signals['stopped'].connect(self.stopped)
+        self.device.signals['epg-update'].connect(self.epg_update)
+        self._link = None
 
     def connect(self, address, password):
         try:
@@ -67,6 +69,7 @@ class RPCDevice(object):
 
     def disconnected(self, address, password):
         log.info('disconnected from tvserver')
+        self._link = None
         # FIXME: should be stop all recordings? Maybe on reconnect. We need to
         # to make sure the tvserver has a none state.
         kaa.OneShotTimer(self.connect, address, password).start(1)
@@ -95,11 +98,27 @@ class RPCDevice(object):
         return self.device.remove(id)
 
     def started(self, id):
+        if not self._link:
+            log.warning('device not connected')
+            return
         self.rpc('started', id)
 
     def stopped(self, id):
+        if not self._link:
+            log.warning('device not connected')
+            return
         self.rpc('stopped', id)
 
+    @kaa.coroutine()
+    def epg_update(self):
+        if not self._link:
+            log.warning('device not connected')
+            yield None
+        epg = self.device.epg()
+        if isinstance(epg, kaa.InProgress):
+            epg = yield epg
+        self.rpc('epg', epg)
+        
 # load all devices
 _devices = []
 

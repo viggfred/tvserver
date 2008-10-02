@@ -129,7 +129,7 @@ class PluginTemplate(object):
     capabilities = []
 
     def __init__(self, config):
-        self.signals = kaa.Signals('started', 'stopped')
+        self.signals = kaa.Signals('started', 'stopped', 'epg-update')
         self.config = config
         self.multiplexes = []
         self._schedule_id = 0

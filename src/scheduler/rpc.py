@@ -63,7 +63,7 @@ class RPCServer(Controller):
         # get kaa.epg address and port
         ip, port = config.rpc.address.split(':')
         kaa.epg.listen('%s:%s' % (ip, int(port) + 1), config.rpc.password)
-        
+
     @kaa.coroutine()
     def client_connected(self, client):
         """
@@ -259,3 +259,7 @@ class RPCDevice(TVDevice):
         for remote in self.recordings[:]:
             if remote.id == id:
                 remote.stopped()
+
+    @kaa.rpc.expose()
+    def epg(self, (backend, data)):
+        kaa.epg.update(backend, data)

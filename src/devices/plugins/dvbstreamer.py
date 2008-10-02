@@ -41,12 +41,12 @@ import kaa
 from template import PluginTemplate
 
 # get logging object
-log = logging.getLogger('dvbstreamer')
+log = logging.getLogger('tvserver.device.dvbstreamer')
 
 
 class Plugin(PluginTemplate):
 
-    capabilities = [ 'streaming', 'multiple' ]
+    capabilities = [ 'streaming', 'multiple', 'epg' ]
 
     def __init__(self, config):
         super(Plugin, self).__init__(config)
@@ -57,9 +57,12 @@ class Plugin(PluginTemplate):
         self.dvbstreamer = kaa.Process('dvbstreamer')
         self.dvbstreamer.signals['raw-stdout'].connect(self._read)
         self.dvbstreamer.signals['completed'].connect(self._dvbstreamer_died)
-        self.ready = False
+        self._ready = False
+        self._busy = True
         self._current_multiplex = None
         self._dvbstreamer_init()
+        self._epg_counter = -1
+        self._recordings = 0
 
     @kaa.coroutine()
     def _dvbstreamer_init(self):
@@ -83,12 +86,12 @@ class Plugin(PluginTemplate):
         """
         mplex = {}
         self.channels = {}
-        for service in (yield self.rpc('lsservices -id')).splitlines():
+        for service in (yield self._call('lsservices -id')).splitlines():
             service = service.strip()
             if not service:
                 continue
             service_id, service_name = service.split(' : ',1)
-            info = yield self.rpc('serviceinfo %s' % service_id)
+            info = yield self._call('serviceinfo %s' % service_id)
             service = {}
             for line in info.split('\n'):
                 if not line.find(':') > 0:
@@ -106,9 +109,10 @@ class Plugin(PluginTemplate):
             self.channels[service['Name']] = service
         self.multiplexes = mplex.values()
         self.initialized = True
+        self.idle()
 
     def _dvbstreamer_died(self, data):
-        log.error('dvbstreamer died! exitcode=%s' % data)
+        log.info('dvbstreamer stopped')
 
     def _read(self, data):
         self._data += data
@@ -121,19 +125,48 @@ class Plugin(PluginTemplate):
                 cmd, self._callback = self._requests.pop(0)
                 self.dvbstreamer.write(cmd)
             else:
-                self.ready = True
+                self._ready = True
             self._data = self._data[self._data.find('DVBStreamer>')+12:]
 
+    @kaa.timed(60)
+    def idle(self):
+        self._epg_counter += 1
+        if self._epg_counter < 0:
+            # no need to scan again, check tuner status
+            if not self._recordings and self.dvbstreamer.in_progress and \
+                   not self.dvbstreamer.stopping:
+                if self._busy:
+                    # mark as not busy
+                    self._busy = False
+                else:
+                    # shut down dvbstreamer, we do not need it
+                    log.info('shut down dvbstreamer')
+                    self.dvbstreamer.stop()
+            return
+        if self._recordings:
+            # busy, wait a minute
+            self._epg_counter = -1
+            return
+        if self._epg_counter >= len(self.multiplexes):
+            # scan again in 3 hours
+            self.signals['epg-update'].emit()
+            self._epg_counter = - 3 * 60
+            return
+        channel = self.channels[self.multiplexes[self._epg_counter][0]]
+        self._current_multiplex = channel['Multiplex UID']
+        self._call('select %s' % channel['ID'])
+
     @kaa.coroutine()
-    def rpc(self, cmd):
-        log.info('rpc %s', cmd)
+    def _call(self, cmd):
+        self._busy = True
+        log.debug('cmd %s', cmd)
         if self.dvbstreamer.stopping:
             yield self.dvbstreamer.in_progress
         if not self.dvbstreamer.in_progress:
             self.dvbstreamer.start(['-a', self.config.adapter])
         async = kaa.InProgress()
-        if self.ready:
-            self.ready = False
+        if self._ready:
+            self._ready = False
             self._callback = async
             self.dvbstreamer.write(cmd + '\n')
         else:
@@ -148,15 +181,20 @@ class Plugin(PluginTemplate):
         if self._current_multiplex != channel['Multiplex UID']:
             self._current_multiplex = channel['Multiplex UID']
             log.info('selecting new multiplex="%s"' % channel['ID'])
-            yield self.rpc('select %s' % channel['ID'])
+            self._call('select %s' % channel['ID'])
+        self._recordings += 1
         # add service filter
-        yield self.rpc('addsf %s %s' % (scheduling_id, url))
-        yield self.rpc('setsf %s %s' % (scheduling_id, channel['ID']))
+        yield self._call('addsf %s %s' % (scheduling_id, url))
+        yield self._call('setsf %s %s' % (scheduling_id, channel['ID']))
         yield scheduling_id
-
 
     @kaa.coroutine()
     def stop(self, id):
         log.info('stopping recording %s' % id)
-        yield self.rpc('setsfmrl %s null://' % id )
-        yield self.rpc('rmsf %s' % id)
+        self._recordings -= 1
+        yield self._call('setsfmrl %s null://' % id )
+        yield self._call('rmsf %s' % id)
+
+    @kaa.coroutine()
+    def epg(self):
+        yield 'xmltv', (yield self._call('dumpxmltv'))

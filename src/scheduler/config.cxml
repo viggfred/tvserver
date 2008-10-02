@@ -33,7 +33,7 @@
     </group>
     <group name="epg">
         <desc>EPG settings</desc>
-        <var name="database" default="$(HOME)/.freevo/epg.db">
+        <var name="database" default="$(HOME)/.tvserver/epg.db">
             <desc lang="en">
                 Location of the EPG database
             </desc>

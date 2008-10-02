@@ -181,6 +181,7 @@ kaa.utils.set_running('tvserver')
 
 # set additional debug
 logging.getLogger('tvserver').setLevel(logging.DEBUG)
+logging.getLogger('epg').setLevel(logging.INFO)
 
 # start tvserver
 if scheduler:
