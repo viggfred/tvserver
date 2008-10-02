@@ -138,8 +138,11 @@ class DVBCard(DeviceInterface):
             # What is that?
             raise SystemError('unknown (%s)' % val[1])
         # special dvb config
+        plugin = 'mplayer'
+        if kaa.utils.which('dvbstreamer'):
+            plugin = 'dvbstreamer'
         self._cfg_add(
-            Var(name='plugin', default='mplayer',
+            Var(name='plugin', default=plugin,
                 desc='plugin to use for this device'))
         # fix name
         if name.find('\0') > 0:
