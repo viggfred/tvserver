@@ -1,32 +1,61 @@
-Freevo TV Server
+TV Server
+=========
+=========
+
+The TV server is used to control a TV card from Freevo and possible
+other applications. It is split into three parts: a scheduler, a
+device wrapper and a Python API to control it.
+
+Scheduler
+=========
+
+You must have one TV server scheduler running in your network. This is
+the master TV server. First create a config file:
+
+tvserver --scheduler --genconfig
+
+Now edit ~/.tvserver/scheduler.conf. If you have a controller like
+Freevo or devices on a different machine you should set rpc.address to
+a different IP address and set a rpc.password. Also set up the epg
+mapping my selecting an EPG source provider. After that you can start
+the TV server with
+
+tvserver --scheduler
 
 
-The Freevo TV Server handles recording and live tv for Freevo. It uses
-freevo-tvdev to use the different card on the different machines.
+Device Mapper
+=============
+
+Each device must be connected to a TV server scheduler. First, create
+the config by calling
+
+tvserver --devices --genconfig
+
+Now edit ~/.tvserver/devices.conf. Besides the found devices and their
+priority there are rpc settings. Please set rpc.address and
+rpc.devices to the values using by the scheduler. You may also set the
+directory where to store the recordings. Now you can start the devices
+mapper as standalone application or start device mapper and scheduler
+in one app.
+
+tvserver --devices
+tvserver --scheduler --devices
 
 
-1. Limitations
+API Interface
+=============
 
-The EPG mapping is a little bit difficult right now, we are searching
-for a better way. You also need the tv_grab helper from Freevo to get
-the epg, later versions of the tvserver should include that.
-
-
-2. Limitations
-
-Only dvb cards are working right now, normal analog cards are
-detected but not working. The scanning option also does not work
-correctly, you need to setup the channels.conf manually.
+Import tvserver in Python and you can control the scheduler with
+Python code remotely. See the API doc for details.
 
 
-3. Basic setup
+Limitations
+===========
 
-To setup freevo-tvserver, just start it. It will write a config file
-and stop again because record.dir is not defined. Please define it in
-the config file and check the file for other possible changes. The
-system wide config file is /etc/freevo/tvserver.conf and if not
-running as root, a user config file is ~/.freevo/tvserver.conf.
+1. Currently only DVB is supported, either using mplayer or svn from
+   dvbstreamer as backend.
 
-Also set the grabbers for the epg you want to use, e.g. xmltv in that
-file. When you restart the tvserver, you can start tvserver again
-(while the first one is running) with the paramater update-epg.
+2. EPG Mapping of the sources channel names to the names from DVB
+   devices is currently broken.
+
+Feel free to send patches to the Freevo devel mailing list.
