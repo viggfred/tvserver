@@ -134,6 +134,9 @@ class DVBCard(DeviceInterface):
         elif val[1] == 2:
             self.type = 'DVB-T'
             self._cfg_set_default('priority', 8)
+        elif val[1] == 3:
+            self.type = 'ATSC'
+            self._cfg_set_default('priority', 7)
         else:
             # What is that?
             raise SystemError('unknown (%s)' % val[1])
