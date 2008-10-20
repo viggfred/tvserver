@@ -163,7 +163,8 @@ class Plugin(PluginTemplate):
         if self.dvbstreamer.stopping:
             yield self.dvbstreamer.in_progress
         if not self.dvbstreamer.in_progress:
-            self.dvbstreamer.start(['-a', self.config.adapter])
+            # FIXME: this only works up to dvb9 but that should be enough
+            self.dvbstreamer.start(['-a', self.config.adapter[-1]])
         async = kaa.InProgress()
         if self._ready:
             self._ready = False
