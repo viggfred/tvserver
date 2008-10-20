@@ -59,18 +59,18 @@ def usage(error_code):
     print 'options:'
     print '--fg                start tvserver in foreground'
     print '--stop              stop running tvserver'
-    print '--scheduler         start the scheduler'
-    print '--devices           start the device'
+    print '--no-scheduler      do not start the scheduler'
+    print '--no-devices        do not start the device mapper'
     print '--genconfig         only generate config file and exit'
     print '--logfile           logging filename for debugging'
     print '--scan              scan for devices and exit'
     print '--help | -h         this message'
     print
-    print 'One tvserver in the network must be started with --scheduler. It is'
+    print 'Only One tvserver in the network must be started with scheduler. It is'
     print 'the master tvserver to which all clients and devices must connect.'
     print 'The config file for the scheduler is /etc/tvserver/scheduler.conf'
     print 'and for users ~/.tvserver/scheduler.conf.'
-    print 'The slave tvserver must only call --devices to connect the devices on'
+    print 'The slave tvserver must only call --no-scheduler to connect the devices on'
     print 'that machine to the master tvserver. The config file is in the same'
     print 'directory and called devices.conf.'
     print 'It is possible start both the scheduler and the devices on one machine'
@@ -88,14 +88,14 @@ logfile = '/var/log/tvserver.log'
 if os.getuid() > 0:
     logfile = os.path.expanduser('~/.tvserver/tvserver.log')
 detach = True
-scheduler = False
-devices = False
+scheduler = True
+devices = True
 genconfig = False
 for o, a in opts:
-    if o == '--scheduler':
-        scheduler = True
-    if o == '--devices':
-        devices = True
+    if o == '--no-scheduler':
+        scheduler = False
+    if o == '--no-devices':
+        devices = False
     if o == '--fg':
         detach = False
     if o == '--genconfig':

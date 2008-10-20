@@ -1,35 +1,22 @@
 TV Server
 =========
-=========
 
 The TV server is used to control a TV card from Freevo and possible
 other applications. It is split into three parts: a scheduler, a
 device wrapper and a Python API to control it.
 
-Scheduler
-=========
+Scheduler and Device Mapper
+---------------------------
 
 You must have one TV server scheduler running in your network. This is
 the master TV server. First create a config file:
 
-tvserver --scheduler --genconfig
+tvserver --genconfig
 
 Now edit ~/.tvserver/scheduler.conf. If you have a controller like
 Freevo or devices on a different machine you should set rpc.address to
 a different IP address and set a rpc.password. Also set up the epg
-mapping my selecting an EPG source provider. After that you can start
-the TV server with
-
-tvserver --scheduler
-
-
-Device Mapper
-=============
-
-Each device must be connected to a TV server scheduler. First, create
-the config by calling
-
-tvserver --devices --genconfig
+mapping my selecting an EPG source provider.
 
 Now edit ~/.tvserver/devices.conf. Besides the found devices and their
 priority there are rpc settings. Please set rpc.address and
@@ -38,8 +25,15 @@ directory where to store the recordings. Now you can start the devices
 mapper as standalone application or start device mapper and scheduler
 in one app.
 
-tvserver --devices
-tvserver --scheduler --devices
+Start tvserver with scheduler and device mapper::
+   tvserver
+
+Start tvserver device mapper with external scheduler::
+   tvserver --no-scheduler
+
+And in case you do not want to use the device mapper and only the
+scheduler call::
+   tvserver --no-devices
 
 
 API Interface
