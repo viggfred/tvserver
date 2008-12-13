@@ -67,7 +67,9 @@ def _time_int2str(i):
     time must be in UTC
     """
     adjust = time.timezone
-    if time.daylight:
+    # FIXME: maybe cache this value, maybe use i and not time.time()
+    # time.daylight does not do what we want
+    if time.localtime(time.time())[8]:
         adjust = time.altzone
     s = time.localtime(i - adjust)
     if adjust < 0:
