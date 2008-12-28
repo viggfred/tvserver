@@ -113,6 +113,7 @@ class Plugin(PluginTemplate):
 
     def _dvbstreamer_died(self, data):
         log.info('dvbstreamer stopped')
+        self._current_multiplex = None
 
     def _read(self, data):
         self._data += data
