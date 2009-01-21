@@ -78,7 +78,7 @@ def usage(error_code):
 
 
 try:
-    opts = [ 'scheduler', 'devices', 'fg', 'genconfig', 'stop', 'help', 'logfile', 'scan' ]
+    opts = [ 'no-scheduler', 'no-devices', 'fg', 'genconfig', 'stop', 'help', 'logfile', 'scan' ]
     opts, args = getopt.getopt(sys.argv[1:], 'h', opts)
 except getopt.GetoptError:
     usage(1)
