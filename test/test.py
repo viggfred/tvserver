@@ -9,7 +9,7 @@ import tvserver
 
 @kaa.coroutine()
 def main():
-    tvserver.connect('192.168.2.2:7600')
+    tvserver.connect('192.168.2.4:7600')
     yield tvserver.wait()
     if 0:
         yield kaa.epg.update()

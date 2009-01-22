@@ -58,7 +58,7 @@ class RPCServer(Controller):
         Start RPC listen mode for incoming connections
         """
         self._rpc = kaa.rpc.Server(config.rpc.address, config.rpc.password)
-        self._rpc.signals['client_connected'].connect(self.client_connected)
+        self._rpc.signals['client-connected'].connect(self.client_connected)
         self._rpc.connect(self)
         # get kaa.epg address and port
         ip, port = config.rpc.address.split(':')
