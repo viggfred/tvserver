@@ -6,7 +6,7 @@
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2008 Dirk Meyer, et al.
+# Copyright (C) 2008-2009 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -35,7 +35,7 @@ __all__ = [ 'RPCServer' ]
 import logging
 
 # kaa imports
-import kaa.rpc
+import kaa.rpc, kaa.rpc2
 import kaa.epg
 
 # tvserver imports
@@ -57,9 +57,9 @@ class RPCServer(Controller):
         """
         Start RPC listen mode for incoming connections
         """
-        self._rpc = kaa.rpc.Server(config.rpc.address, config.rpc.password)
+        self._rpc = kaa.rpc2.Server(config.rpc.address, config.rpc.password)
         self._rpc.signals['client-connected'].connect(self.client_connected)
-        self._rpc.connect(self)
+        self._rpc.register(self)
         # get kaa.epg address and port
         ip, port = config.rpc.address.split(':')
         kaa.epg.listen('%s:%s' % (ip, int(port) + 1), config.rpc.password)
@@ -85,7 +85,7 @@ class RPCServer(Controller):
             self._clients.remove(client)
         else:
             for device in get_devices():
-                if device._rpc == client:
+                if device.client == client:
                     remove_device(device)
                     break
             else:
@@ -209,9 +209,8 @@ class RPCDevice(TVDevice):
 
     def __init__(self, rpcsocket, name, priority, multiplexes, capabilities):
         super(RPCDevice, self).__init__(name, priority, multiplexes, capabilities)
-        rpcsocket.connect(self)
-        self._rpc = rpcsocket
-        self.rpc = rpcsocket.rpc
+        rpcsocket.register(self)
+        self.client = rpcsocket
 
     def schedule(self, recording, start, stop):
         super(RPCDevice, self).schedule(recording, start, stop)
@@ -237,16 +236,16 @@ class RPCDevice(TVDevice):
                 continue
             if remote.id is None:
                 # add the recording
-                remote.id = (yield self.rpc('schedule',
+                remote.id = (yield self.client.rpc('schedule',
                     remote.channel, remote.start, remote.stop, remote.url))
                 continue
             if not remote.valid:
                 # remove the recording
                 self.recordings.remove(remote)
-                yield self.rpc('remove', remote.id)
+                yield self.client.rpc('remove', remote.id)
 
     def create_fxd(self, filename, content):
-        return self.rpc('create_fxd', filename, content)
+        return self.client.rpc('create_fxd', filename, content)
 
     @kaa.rpc.expose()
     def started(self, id):

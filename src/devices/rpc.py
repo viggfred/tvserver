@@ -6,7 +6,7 @@
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2008 Dirk Meyer, et al.
+# Copyright (C) 2008-2009 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -37,42 +37,36 @@ import time
 
 # kaa imports
 import kaa
-import kaa.rpc
+import kaa.rpc, kaa.rpc2
 from kaa.utils import utc2localtime
 
 # tvdev imports
 from system import config, get_devices
 
 # get logging object
-log = logging.getLogger()
+log = logging.getLogger('tvserver')
 
 class RPCDevice(object):
     """
     Controller for kaa.rpc.
     """
-    def __init__(self, device):
+    def __init__(self, device, address, password):
         self.device = device
         self.device.signals['started'].connect(self.started)
         self.device.signals['stopped'].connect(self.stopped)
         self.device.signals['epg-update'].connect(self.epg_update)
-        self._link = None
+        self.channel = kaa.rpc2.connect(address, password, retry=1)
+        self.channel.register(self)
+        self.channel.signals['open'].connect(self._connected)
+        self.channel.signals['closed'].connect(self._disconnected)
 
-    def connect(self, address, password):
-        try:
-            self._link = kaa.rpc.Client(address, password)
-            self._link.connect(self)
-            self._link.signals['closed'].connect(self.disconnected, address, password)
-            self.rpc = self._link.rpc
-            log.info('connected to tvserver')
-        except kaa.rpc.ConnectError:
-            kaa.OneShotTimer(self.connect, address, password).start(1)
+    def _connected(self):
+        log.info('connected to tvserver')
 
-    def disconnected(self, address, password):
+    def _disconnected(self):
         log.info('disconnected from tvserver')
-        self._link = None
         # FIXME: should be stop all recordings? Maybe on reconnect. We need to
         # to make sure the tvserver has a none state.
-        kaa.OneShotTimer(self.connect, address, password).start(1)
 
     @kaa.rpc.expose()
     def identify(self):
@@ -98,27 +92,27 @@ class RPCDevice(object):
         return self.device.remove(id)
 
     def started(self, id):
-        if not self._link:
+        if not self.channel.status == kaa.rpc2.CONNECTED:
             log.warning('device not connected')
             return
-        self.rpc('started', id)
+        self.channel.rpc('started', id)
 
     def stopped(self, id):
-        if not self._link:
+        if not self.channel.status == kaa.rpc2.CONNECTED:
             log.warning('device not connected')
             return
-        self.rpc('stopped', id)
+        self.channel.rpc('stopped', id)
 
     @kaa.coroutine()
     def epg_update(self):
-        if not self._link:
+        if not self.channel.status == kaa.rpc2.CONNECTED:
             log.warning('device not connected')
             yield None
         epg = self.device.epg()
         if isinstance(epg, kaa.InProgress):
             epg = yield epg
-        self.rpc('epg', epg)
-        
+        self.channel.rpc('epg', epg)
+
 # load all devices
 _devices = []
 
@@ -128,7 +122,5 @@ def connect(address, password):
     Connect to tvserver using kaa.rpc
     """
     for device in (yield get_devices()):
-        rpc = RPCDevice(device)
-        rpc.connect(address, password)
-        _devices.append(rpc)
+        _devices.append(RPCDevice(device, address, password))
     yield _devices is not []
