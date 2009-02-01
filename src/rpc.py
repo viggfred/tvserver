@@ -6,7 +6,7 @@
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2008 Dirk Meyer, et al.
+# Copyright (C) 2008-2009 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -54,6 +54,8 @@ class TVServer(object):
         self.favorites = Favorites(self)
         self.channel = kaa.rpc2.connect(address, password, retry=1)
         self.channel.register(self)
+        self.channel.signals['open'].connect(self._connected)
+        self.channel.signals['closed'].connect(self._disconnected)
         # connect kaa.epg database to port + 1
         address, port = address.split(':')
         kaa.epg.connect('%s:%s' % (address, int(port) + 1), password)
@@ -68,7 +70,6 @@ class TVServer(object):
     def _disconnected(self):
         self.signals['disconnected'].emit()
         log.info('disconnected from tvserver')
-        kaa.OneShotTimer(self._connect).start(1)
         self.recordings._clear()
         self.favorites._clear()
 
