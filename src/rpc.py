@@ -35,7 +35,7 @@ import time
 
 # kaa imports
 import kaa
-import kaa.rpc
+import kaa.rpc, kaa.rpc2
 import kaa.epg
 from kaa.utils import utc2localtime, localtime2utc
 
@@ -48,33 +48,21 @@ log = logging.getLogger('tvserver')
 
 class TVServer(object):
 
-    rpc = None
-
     def __init__(self, address, password):
         self.signals = kaa.Signals('connected', 'disconnected', 'changed')
         self.recordings = Recordings(self)
         self.favorites = Favorites(self)
-        self.address = address
-        self.password = password
-        self._connect()
+        self.channel = kaa.rpc2.connect(address, password, retry=1)
+        self.channel.register(self)
+        # connect kaa.epg database to port + 1
+        address, port = address.split(':')
+        kaa.epg.connect('%s:%s' % (address, int(port) + 1), password)
 
-    def _connect(self):
-        try:
-            self._link = kaa.rpc.Client(self.address, self.password)
-            self._link.connect(self)
-            self._link.signals['closed'].connect(self._disconnected)
-            self.rpc = self._link.rpc
-            address, port = self.address.split(':')
-            kaa.epg.connect('%s:%s' % (address, int(port) + 1), self.password)
-            self.rpc('recording_list').connect(self.recordings._update)
-            l = self.rpc('favorite_list')
-            l.connect(self.favorites._update)
-            l.connect(self._connected)
-        except kaa.rpc.ConnectError:
-            kaa.OneShotTimer(self._connect).start(1)
-
+    @kaa.coroutine()
     def _connected(self, *args):
         log.info('connected to tvserver')
+        self.recordings._update((yield self.channel.rpc('recording_list')))
+        self.favorites._update((yield self.channel.rpc('favorite_list')))
         self.signals['connected'].emit()
 
     def _disconnected(self):
@@ -83,11 +71,10 @@ class TVServer(object):
         kaa.OneShotTimer(self._connect).start(1)
         self.recordings._clear()
         self.favorites._clear()
-        self.rpc = None
 
     @property
     def connected(self):
-        return self.rpc is not None
+        return self.channel.status == kaa.rpc2.CONNECTED
 
     def recording_add(self, name, channel, priority, start, stop, **info):
         """
@@ -104,7 +91,7 @@ class TVServer(object):
             raise RuntimeError('not connected to tvserver')
         start = localtime2utc(start)
         stop = localtime2utc(stop)
-        return self.rpc('recording_add', name, channel, priority, start, stop, **info)
+        return self.channel.rpc('recording_add', name, channel, priority, start, stop, **info)
 
     def recording_remove(self, id):
         """
@@ -115,7 +102,7 @@ class TVServer(object):
         """
         if not self.connected:
             raise RuntimeError('not connected to tvserver')
-        return self.rpc('recording_remove', id)
+        return self.channel.rpc('recording_remove', id)
 
     def favorite_update(self):
         """
@@ -123,7 +110,7 @@ class TVServer(object):
         """
         if not self.connected:
             raise RuntimeError('not connected to tvserver')
-        return self.rpc('favorite_update')
+        return self.channel.rpc('favorite_update')
 
     def favorite_add(self, title, channels, days, times, priority, once):
         """
@@ -143,7 +130,7 @@ class TVServer(object):
             days = [ 0, 1, 2, 3, 4, 5, 6 ]
         if times == 'ANY':
             times = [ '00:00-23:59' ]
-        return self.rpc('favorite_add', title, channels, priority, days, times, once)
+        return self.channel.rpc('favorite_add', title, channels, priority, days, times, once)
 
     def favorite_remove(self, id):
         """
@@ -153,7 +140,7 @@ class TVServer(object):
         """
         if not self.connected:
             raise RuntimeError('not connected to tvserver')
-        return self.rpc('favorite_remove', id)
+        return self.channel.rpc('favorite_remove', id)
 
     def favorite_modify(self, id, **kwargs):
         """
@@ -161,7 +148,7 @@ class TVServer(object):
         """
         if not self.connected:
             raise RuntimeError('not connected to tvserver')
-        return self.rpc('favorite_remove', id, **kwargs)
+        return self.channel.rpc('favorite_remove', id, **kwargs)
 
     @kaa.rpc.expose()
     def identify(self):
