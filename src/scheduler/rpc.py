@@ -35,7 +35,7 @@ __all__ = [ 'RPCServer' ]
 import logging
 
 # kaa imports
-import kaa.rpc, kaa.rpc2
+import kaa.rpc
 import kaa.epg
 
 # tvserver imports
@@ -57,7 +57,7 @@ class RPCServer(Controller):
         """
         Start RPC listen mode for incoming connections
         """
-        self._rpc = kaa.rpc2.Server(config.rpc.address, config.rpc.password)
+        self._rpc = kaa.rpc.Server(config.rpc.address, config.rpc.password)
         self._rpc.signals['client-connected'].connect(self.client_connected)
         self._rpc.register(self)
         # get kaa.epg address and port

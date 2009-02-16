@@ -35,7 +35,7 @@ import time
 
 # kaa imports
 import kaa
-import kaa.rpc, kaa.rpc2
+import kaa.rpc
 import kaa.epg
 from kaa.utils import utc2localtime, localtime2utc
 
@@ -52,7 +52,7 @@ class TVServer(object):
         self.signals = kaa.Signals('connected', 'disconnected', 'changed')
         self.recordings = Recordings(self)
         self.favorites = Favorites(self)
-        self.channel = kaa.rpc2.connect(address, password, retry=1)
+        self.channel = kaa.rpc.connect(address, password, retry=1)
         self.channel.register(self)
         self.channel.signals['open'].connect(self._connected)
         self.channel.signals['closed'].connect(self._disconnected)
@@ -75,7 +75,7 @@ class TVServer(object):
 
     @property
     def connected(self):
-        return self.channel.status == kaa.rpc2.CONNECTED
+        return self.channel.status == kaa.rpc.CONNECTED
 
     def recording_add(self, name, channel, priority, start, stop, **info):
         """

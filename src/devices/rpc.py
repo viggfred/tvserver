@@ -37,7 +37,7 @@ import time
 
 # kaa imports
 import kaa
-import kaa.rpc, kaa.rpc2
+import kaa.rpc
 from kaa.utils import utc2localtime
 
 # tvdev imports
@@ -55,7 +55,7 @@ class RPCDevice(object):
         self.device.signals['started'].connect(self.started)
         self.device.signals['stopped'].connect(self.stopped)
         self.device.signals['epg-update'].connect(self.epg_update)
-        self.channel = kaa.rpc2.connect(address, password, retry=1)
+        self.channel = kaa.rpc.connect(address, password, retry=1)
         self.channel.register(self)
         self.channel.signals['open'].connect(self._connected)
         self.channel.signals['closed'].connect(self._disconnected)
@@ -92,20 +92,20 @@ class RPCDevice(object):
         return self.device.remove(id)
 
     def started(self, id):
-        if not self.channel.status == kaa.rpc2.CONNECTED:
+        if not self.channel.status == kaa.rpc.CONNECTED:
             log.warning('device not connected')
             return
         self.channel.rpc('started', id)
 
     def stopped(self, id):
-        if not self.channel.status == kaa.rpc2.CONNECTED:
+        if not self.channel.status == kaa.rpc.CONNECTED:
             log.warning('device not connected')
             return
         self.channel.rpc('stopped', id)
 
     @kaa.coroutine()
     def epg_update(self):
-        if not self.channel.status == kaa.rpc2.CONNECTED:
+        if not self.channel.status == kaa.rpc.CONNECTED:
             log.warning('device not connected')
             yield None
         epg = self.device.epg()
