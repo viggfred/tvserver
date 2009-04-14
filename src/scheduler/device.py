@@ -39,7 +39,7 @@ import logging
 # kaa imports
 import kaa
 import kaa.epg
-from kaa.utils import property, utc2localtime
+from kaa.utils import property
 
 # record imports
 from config import config

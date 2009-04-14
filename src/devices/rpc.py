@@ -38,7 +38,6 @@ import time
 # kaa imports
 import kaa
 import kaa.rpc
-from kaa.utils import utc2localtime
 
 # tvdev imports
 from system import config, get_devices
@@ -71,13 +70,11 @@ class RPCDevice(object):
     @kaa.rpc.expose()
     def identify(self):
         name = '%s:%s' % (socket.gethostname(), self.device.name)
-        return name, self.device.priority, self.device.multiplexes, \
-               self.device.capabilities
+        return name, self.device.priority, self.device.multiplexes, self.device.capabilities
 
     @kaa.rpc.expose()
     def schedule(self, channel, start, stop, url):
-        return self.device.schedule(
-            channel, utc2localtime(start), utc2localtime(stop), url)
+        return self.device.schedule(channel, start, stop, url)
 
     @kaa.rpc.expose()
     def create_fxd(self, filename, content):

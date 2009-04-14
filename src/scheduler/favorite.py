@@ -51,9 +51,11 @@ __all__ = [ 'Favorite' ]
 import re
 import time
 import logging
+from datetime import datetime
 
 # kaa imports
 import kaa
+import kaa.dateutils
 
 # record imports
 from config import config
@@ -123,7 +125,6 @@ class Favorite(object):
     def match(self, name, channel, start):
         """
         Return True if name, channel and start match this favorite.
-        @note: start time is local time and not UTC
         """
         if kaa.str_to_unicode(name.lower()) != self.name.lower() and not self.substring:
             return False
@@ -131,10 +132,11 @@ class Favorite(object):
             return False
         if not channel in self.channels:
             return False
-        timestruct = time.localtime(start)
-        if not int(time.strftime('%w', timestruct)) in self.days:
+        # convert start time into struct in localtime
+        timetuple = datetime.fromtimestamp(start, kaa.dateutils.local).timetuple()
+        if not int(time.strftime('%w', timetuple)) in self.days:
             return False
-        stime = int(timestruct[3]) * 100 + int(timestruct[4])
+        stime = int(timetuple[3]) * 100 + int(timetuple[4])
         for t in self.times:
             m = _time_re.match(t).groups()
             start = int(m[0])*100 + int(m[1])

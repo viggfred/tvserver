@@ -6,7 +6,7 @@
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2004-2008 Dirk Meyer, et al.
+# Copyright (C) 2004-2009 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -41,13 +41,11 @@ import logging
 # kaa imports
 import kaa
 import kaa.xmlutils
-from kaa.utils import localtime2utc, utctime
 
 # tvserver imports
 from config import config
 import device
-from recording import Recording, MISSED, SAVED, SCHEDULED, RECORDING, CONFLICT, \
-     DELETED, FAILED
+from recording import Recording, MISSED, SAVED, SCHEDULED, RECORDING, CONFLICT, DELETED, FAILED
 from favorite import Favorite
 import scheduler
 import epg
@@ -96,7 +94,7 @@ class Controller(object):
             # mark that all are printed once
             self.only_print_current = True
         # print only from the last 24 hours
-        maxtime = utctime() - 60 * 60 * 24
+        maxtime = int(time.time()) - 60 * 60 * 24
         info = 'recordings:\n'
         for r in self.recordings:
             if all or r.stop > maxtime:
@@ -118,8 +116,8 @@ class Controller(object):
             kaa.OneShotTimer(self.reschedule).start(0.1)
             yield False
         self.locked = True
-        # get current time
-        ctime = utctime()
+        # get current time (UTC)
+        ctime = int(time.time())
         # remove old recorderings
         self.recordings = filter(lambda r: r.start > ctime - 60*60*24*7, self.recordings)
         # run the scheduler to attach devices to recordings
@@ -226,10 +224,9 @@ class Controller(object):
         if not success:
             # FIXME: delete fxd file
             recording.status = FAILED
-        elif utctime() + 100 < recording.stop:
+        elif time.time() + 100 < recording.stop:
             # something went wrong
-            log.info('failed: stopped %s secs to early' % \
-                     (recording.stop - utctime()))
+            log.info('failed: stopped %s secs to early' % (recording.stop - int(time.time())))
             recording.status = FAILED
         else:
             recording.status = SAVED

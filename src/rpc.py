@@ -37,7 +37,6 @@ import time
 import kaa
 import kaa.rpc
 import kaa.epg
-from kaa.utils import utc2localtime, localtime2utc
 
 # tvserver imports
 from recording import Recordings
@@ -83,15 +82,13 @@ class TVServer(object):
 
         @param name: name of the program
         @param channel: name of the channel
-        @param start: start time in localtime
-        @param stop: stop time in localtime
+        @param start: start time in UTC
+        @param stop: stop time in UTC
         @param info: additional information
         @returns: InProgress object
         """
         if not self.connected:
             raise RuntimeError('not connected to tvserver')
-        start = localtime2utc(start)
-        stop = localtime2utc(stop)
         return self.channel.rpc('recording_add', name, channel, priority, start, stop, **info)
 
     def recording_remove(self, id):

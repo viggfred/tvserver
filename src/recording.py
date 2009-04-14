@@ -31,9 +31,12 @@
 
 __all__ = [ 'Recording', 'Recordings' ]
 
+# python imports
+from datetime import datetime
+
 # kaa imports
 import kaa
-from kaa.utils import utc2localtime
+import kaa.dateutils
 
 class Recording(object):
     """
@@ -47,11 +50,11 @@ class Recording(object):
         """
         Update recording based on event from tvserver or init
         """
-        self.id, self.name, self.channel, self.priority, self.start, self.stop, \
-                 self.status, self.start_padding, self.stop_padding, \
-                 self.description = args
-        self.start = utc2localtime(self.start)
-        self.stop = utc2localtime(self.stop)
+        self.id, self.name, self.channel, self.priority, self.start_timestamp, self.stop_timestamp, \
+                 self.status, self.start_padding, self.stop_padding, self.description = args
+        # Timezone-aware datetime objects in the local timezone.
+        self.start = datetime.fromtimestamp(self.start_timestamp, kaa.dateutils.local)
+        self.stop = datetime.fromtimestamp(self.stop_timestamp, kaa.dateutils.local)
 
     def remove(self):
         """
@@ -131,8 +134,8 @@ class Recordings(object):
 
         @param name: name of the program
         @param channel: name of the channel
-        @param start: start time in localtime
-        @param stop: stop time in localtime
+        @param start: start time in seconds since Epoch (UTC)
+        @param stop: stop time in seconds since Epoch (UTC)
         @param info: additional information
         @returns: InProgress object
         """
@@ -152,8 +155,8 @@ class Recordings(object):
         Get the recording defined by the given channel and time
 
         @param channel: name of the channel
-        @param start: start time in localtime
-        @param stop: stop time in localtime
+        @param start: start time in seconds since Epoch (UTC)
+        @param stop: stop time in seconds since Epoch (UTC)
         """
         key = '%s-%s-%s' % (channel, start, stop)
         if key in self._recordings:

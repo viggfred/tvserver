@@ -39,10 +39,12 @@ import re
 import string
 import logging
 import os
+from datetime import datetime
 
 # kaa imports
 import kaa
-from kaa.utils import utc2localtime, property
+import kaa.dateutils
+from kaa.utils import property
 import kaa.xmlutils
 
 # record imports
@@ -62,27 +64,29 @@ FAILED = 'failed'
 
 def _time_int2str(i):
     """
-    Helper function to create a time string from an int. The timestring
-    contains the timezone as integer, e.g. CEST == +0200. The input
-    time must be in UTC
+    Helper function to create a time string from seconds since epoch
+    as int (UTC). The timestring contains the timezone as integer,
+    e.g. CEST == +0200.
     """
-    adjust = time.timezone
-    # FIXME: maybe cache this value, maybe use i and not time.time()
-    # time.daylight does not do what we want
-    if time.localtime(time.time())[8]:
-        adjust = time.altzone
-    s = time.localtime(i - adjust)
-    if adjust < 0:
-        adjust = '+%04d' % (-adjust / 36)
-    else:
-        adjust = '-%04d' % (adjust / 36)
-    return time.strftime('%Y%m%d%H%M', s) + ' ' + adjust
+    return datetime.fromtimestamp(i, kaa.dateutils.local).strftime('%Y%m%d%H%M %z')
+#     adjust = time.timezone
+#     # FIXME: maybe cache this value, maybe use i and not time.time()
+#     # time.daylight does not do what we want
+#     if time.localtime(time.time())[8]:
+#         adjust = time.altzone
+#     s = time.localtime(i - adjust)
+#     if adjust < 0:
+#         adjust = '+%04d' % (-adjust / 36)
+#     else:
+#         adjust = '-%04d' % (adjust / 36)
+#     return time.strftime('%Y%m%d%H%M', s) + ' ' + adjust
 
 def _time_str2int(s):
     """
     Helper function to create an int from a string created by _time_int2str.
     The returned time in seconds is in UTC.
     """
+    # time.FIXME
     sec = int(time.mktime(time.strptime(s.split()[0], '%Y%m%d%H%M')))
     return sec - int(s.split()[1]) * 36
 
@@ -93,8 +97,7 @@ class Recording(object):
     """
     NEXT_ID = 0
 
-    def __init__(self, name='unknown', channel='unknown', priority=0, start=0, stop=0,
-                 node=None, info={} ):
+    def __init__(self, name='unknown', channel='unknown', priority=0, start=0, stop=0, node=None, info={} ):
         self.id = Recording.NEXT_ID
         Recording.NEXT_ID += 1
         self.name = name
@@ -166,7 +169,7 @@ class Recording(object):
                            'title'   : kaa.unicode_to_str(self.subtitle) }
         filemask = config.recording.filemask % filename_array
         filename = ''
-        for letter in time.strftime(filemask, time.localtime(utc2localtime(self.start))):
+        for letter in datetime.fromtimestamp(self.start, kaa.dateutils.local).strftime(filemask):
             if letter in string.ascii_letters + string.digits:
                 filename += letter
             elif filename and filename[-1] != '_':
@@ -236,9 +239,8 @@ class Recording(object):
             info.add_child(key, value)
         info.add_child('runtime', '%s min.' % int((self.stop - self.start) / 60))
         info.add_child('record-start', int(time.time()))
-        info.add_child('record-stop', utc2localtime(self.stop) + self.stop_padding)
-        info.add_child('year', time.strftime('%m-%d %H:%M',
-            time.localtime(utc2localtime(self.start))))
+        info.add_child('record-stop', self.stop + self.stop_padding)
+        info.add_child('year', datetime.fromtimestamp(self.start, kaa.dateutils.local).strftime('%m-%d %H:%M'))
         self._scheduled_device.create_fxd(self.url + '.fxd', fxd.toxml())
 
     def __str__(self):
@@ -299,8 +301,7 @@ class Recording(object):
                 node.add_child(var, getattr(self, var))
         if self.__url:
             node.add_child('url', kaa.str_to_unicode(self.__url))
-        node.add_child('timer', start=_time_int2str(self.start),
-                       stop=_time_int2str(self.stop))
+        node.add_child('timer', start=_time_int2str(self.start), stop=_time_int2str(self.stop))
         node.add_child('padding', start=self.start_padding, stop=self.stop_padding)
         info = node.add_child('info')
         for key, value in self.info.items():

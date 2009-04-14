@@ -142,11 +142,11 @@ class PluginTemplate(object):
         and start a scanning for VPS or something similar. The default behaviour
         is to create a Schedule object which will call self.start and self.stop.
 
-        @param channel: Channel name as defined in the multiplex
-        @param start: start time in local time
-        @param stop: stop time in local time
-        @param url: file:// or udp:// url
-        @returns unique schedule id
+        :param channel: Channel name as defined in the multiplex
+        :param start: start time (UTC)
+        :param stop: stop time (UTC)
+        :param url: file:// or udp:// url
+        :returns unique schedule id
         """
         if url.find('://') == -1:
             url = 'file:' + os.path.join(config.directory, url)
