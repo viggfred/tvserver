@@ -54,6 +54,10 @@ if os.path.dirname(__file__) in sys.path:
 import kaa
 import kaa.utils
 
+print 'This code is broken right now and needs to be adjusted to the'
+print 'latest kaa.base.Process changes. All plugins need to be updated.'
+sys.exit(0)
+
 def usage(error_code):
     print 'tvserver [options]'
     print 'options:'
