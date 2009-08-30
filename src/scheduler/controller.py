@@ -203,6 +203,8 @@ class Controller(object):
             r.__xml__(xml)
         for f in self.favorites:
             f.__xml__(xml)
+        if not os.path.isdir(os.path.dirname(self.datafile)):
+            os.makedirs(os.path.dirname(self.datafile))
         xml.save(self.datafile)
 
     #

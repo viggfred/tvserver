@@ -7,7 +7,7 @@
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2004-2008 Dirk Meyer, et al.
+# Copyright (C) 2004-2009 Dirk Meyer, et al.
 #
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
 #
@@ -53,10 +53,6 @@ if os.path.dirname(__file__) in sys.path:
 # kaa imports
 import kaa
 import kaa.utils
-
-print 'This code is broken right now and needs to be adjusted to the'
-print 'latest kaa.base.Process changes. All plugins need to be updated.'
-sys.exit(0)
 
 def usage(error_code):
     print 'tvserver [options]'
@@ -152,7 +148,7 @@ log.addHandler(handler)
 if scheduler:
     import tvserver.scheduler
     # load config file
-    tvserver.scheduler.config.load('/etc/scheduler.conf')
+    tvserver.scheduler.config.load('/etc/tvserver/scheduler.conf')
     # if started as user add personal config file
     if os.getuid() > 0:
         cfgdir = os.path.expanduser('~/.tvserver')
@@ -162,7 +158,7 @@ if scheduler:
 if devices:
     import tvserver.devices
     # load config file
-    tvserver.devices.config.load('/etc/devices.conf')
+    tvserver.devices.config.load('/etc/tvserver/devices.conf')
     # if started as user add personal config file
     if os.getuid() > 0:
         cfgdir = os.path.expanduser('~/.tvserver')
@@ -186,10 +182,11 @@ kaa.utils.set_running('tvserver')
 # set additional debug
 logging.getLogger('tvserver').setLevel(logging.DEBUG)
 logging.getLogger('epg').setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 
 # start tvserver
 if scheduler:
-    datafile = '/etc/schedule.xml'
+    datafile = '/var/lib/tvserver/schedule.xml'
     if os.getuid() > 0:
         datafile = os.path.expanduser('~/.tvserver/schedule.xml')
     tvserver.scheduler.init(datafile)

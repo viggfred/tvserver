@@ -6,7 +6,7 @@
 #
 # -----------------------------------------------------------------------------
 # TVServer - A generic TV device wrapper and scheduler
-# Copyright (C) 2008 Dirk Meyer, et al.
+# Copyright (C) 2008-2009 Dirk Meyer, et al.
 #
 # First Edition: Dirk Meyer <dischi@freevo.org>
 # Maintainer:    Dirk Meyer <dischi@freevo.org>
@@ -55,8 +55,9 @@ class Plugin(PluginTemplate):
         self._callback = None
         self._requests = []
         self.dvbstreamer = kaa.Process('dvbstreamer')
-        self.dvbstreamer.signals['raw-stdout'].connect(self._read)
-        self.dvbstreamer.signals['completed'].connect(self._dvbstreamer_died)
+        self.dvbstreamer.signals['read'].connect(self._read)
+        self.dvbstreamer.signals['finished'].connect(self._dvbstreamer_died)
+        self.dvbstreamer.stop_command = 'quit'
         self._ready = False
         self._busy = True
         self._current_multiplex = None
@@ -98,6 +99,9 @@ class Plugin(PluginTemplate):
                     continue
                 attr, value = line.split(':', 1)
                 service[attr.strip()] = value.strip()
+            if not service:
+                log.error('invalid service %s: %s', service_id, info)
+                continue
             if service['Name'] in self.channels:
                 continue
             if not service.get('Multiplex UID'):
@@ -134,8 +138,7 @@ class Plugin(PluginTemplate):
         self._epg_counter += 1
         if self._epg_counter < 0:
             # no need to scan again, check tuner status
-            if not self._recordings and self.dvbstreamer.in_progress and \
-                   not self.dvbstreamer.stopping:
+            if not self._recordings and self.dvbstreamer.running and not self.dvbstreamer.stopping:
                 if self._busy:
                     # mark as not busy
                     self._busy = False
@@ -162,9 +165,11 @@ class Plugin(PluginTemplate):
         self._busy = True
         log.debug('cmd %s', cmd)
         if self.dvbstreamer.stopping:
-            yield self.dvbstreamer.in_progress
-        if not self.dvbstreamer.in_progress:
+            log.info('waiting for dvbstreamer to be stopped')
+            yield kaa.inprogress(self.dvbstreamer)
+        if not self.dvbstreamer.running:
             # FIXME: this only works up to dvb9 but that should be enough
+            log.info('starting dvbstreamer')
             self.dvbstreamer.start(['-a', self.config.adapter[-1]])
         async = kaa.InProgress()
         if self._ready:

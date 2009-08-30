@@ -41,7 +41,7 @@
     </group>
     <code>
         import kaa.epg
-        for cfg in kaa.epg.update.config.get_variables():
+        for cfg in kaa.epg.update.config.variables:
             config.epg.add_variable(cfg, kaa.epg.update.config._cfg_get(cfg))
     </code>
 </config>

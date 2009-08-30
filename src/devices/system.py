@@ -92,8 +92,10 @@ def get_devices():
             else:
                 log.info('skipping %s' % i.device)
             continue
+        log.info('activate %s' % i.device)
         exec('from plugins.%s import Plugin' % i.plugin)
         device = Plugin(i)
         yield device.initialized
+        log.info('device %s ready' % i.device)
         _devices.append(device)
     yield _devices
