@@ -114,6 +114,8 @@ for o, a in opts:
         for info in tvserver.devices.info:
             print '*** %s ***' % info.device
             print info
+        if not tvserver.devices.info:
+            print 'No devices found, sorry.'
         sys.exit(0)
     if o in ('--help', '-h'):
         usage(0)
